@@ -40,7 +40,6 @@ const IconFile = () => (
   </svg>
 );
 
-// Thinking progress phases — cycles while AI is working
 const THINKING_PHASES = [
   "Reading your question…",
   "Searching knowledge base…",
@@ -53,18 +52,15 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Material panel state
   const [materialOpen, setMaterialOpen] = useState(false);
   const [materialContent, setMaterialContent] = useState("");
 
-  // Dynamic recents: [{ id, label, favorited }]
   const [recents, setRecents] = useState([]);
 
-  // Auth state
+  // Auth — driven entirely by supabase.auth.onAuthStateChange
   const [user, setUser] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
-  // Thinking phase cycling
   const [thinkingPhase, setThinkingPhase] = useState(0);
 
   const bottomRef = useRef(null);
@@ -73,14 +69,13 @@ export default function ChatPage() {
   const imageInputRef = useRef(null);
   const dropdownRef = useRef(null);
 
-  // Multi-attachment state
   const [attachments, setAttachments] = useState([]);
   const [plusOpen, setPlusOpen] = useState(false);
 
+  // ── Build a plain user object from a Supabase session ──────
   function userFromSession(session) {
     const sessionUser = session?.user;
     if (!sessionUser) return null;
-
     const metadata = sessionUser.user_metadata || {};
     return {
       id: sessionUser.id,
@@ -91,16 +86,19 @@ export default function ChatPage() {
     };
   }
 
+  // ── Supabase auth listener ─────────────────────────────────
   useEffect(() => {
     let mounted = true;
 
+    // Hydrate on mount
     supabase.auth.getSession().then(({ data }) => {
       if (mounted) setUser(userFromSession(data.session));
     });
 
+    // React to sign-in / sign-out / token refresh
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(userFromSession(session));
-      if (session) setAuthModalOpen(false);
+      if (session) setAuthModalOpen(false); // close modal on successful login
     });
 
     return () => {
@@ -113,7 +111,6 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
-  // Cycle through thinking phases while loading
   useEffect(() => {
     if (!isLoading) { setThinkingPhase(0); return; }
     const interval = setInterval(() => {
@@ -122,7 +119,6 @@ export default function ChatPage() {
     return () => clearInterval(interval);
   }, [isLoading]);
 
-  // Auto-open material panel when a qualifying AI message arrives
   useEffect(() => {
     if (messages.length === 0) {
       setMaterialOpen(false);
@@ -136,7 +132,6 @@ export default function ChatPage() {
     }
   }, [messages]);
 
-  // Save first user message to recents
   useEffect(() => {
     if (messages.length === 1 && messages[0].role === "user") {
       const label = messages[0].content.trim().slice(0, 60) + (messages[0].content.trim().length > 60 ? "…" : "");
@@ -149,27 +144,22 @@ export default function ChatPage() {
   }, [messages]);
 
   function toggleFavorite(id) {
-    setRecents(prev =>
-      prev.map(r => r.id === id ? { ...r, favorited: !r.favorited } : r)
-    );
+    setRecents(prev => prev.map(r => r.id === id ? { ...r, favorited: !r.favorited } : r));
   }
 
   function renameChat(id, newLabel) {
-    setRecents(prev =>
-      prev.map(r => r.id === id ? { ...r, label: newLabel } : r)
-    );
+    setRecents(prev => prev.map(r => r.id === id ? { ...r, label: newLabel } : r));
   }
 
   function deleteChat(id) {
     setRecents(prev => prev.filter(r => r.id !== id));
   }
 
-  // Save current chat to recents, then clear — called by "New chat"
   function handleNewChat() {
     const firstUser = messages.find(m => m.role === "user");
     if (firstUser) {
       const raw = firstUser.content.trim();
-      const label = raw.slice(0, 60) + (raw.length > 60 ? "\u2026" : "");
+      const label = raw.slice(0, 60) + (raw.length > 60 ? "…" : "");
       const id = Date.now().toString();
       setRecents(prev => {
         if (prev.some(r => r.label === label)) return prev;
@@ -179,7 +169,6 @@ export default function ChatPage() {
     clearMessages();
   }
 
-  // Close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(e) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -258,12 +247,10 @@ export default function ChatPage() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   }
 
-  // Update browser tab title based on active chat
   useEffect(() => {
     const firstUser = messages.find(m => m.role === "user");
     if (firstUser) {
-      const label = firstUser.content.trim().slice(0, 50);
-      document.title = `${label} — Nexion`;
+      document.title = `${firstUser.content.trim().slice(0, 50)} — Nexion`;
     } else {
       document.title = "Nexion";
     }
@@ -271,7 +258,7 @@ export default function ChatPage() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    setUser(null);
+    // onAuthStateChange will set user to null automatically
     setRecents([]);
     clearMessages();
     setMaterialOpen(false);
@@ -283,7 +270,6 @@ export default function ChatPage() {
   return (
     <div style={{ display: "flex", height: "100vh", background: "#060a10", color: "#e2e8f0", fontFamily: "Georgia, serif", overflow: "hidden", animation: "fadeInHard 0.3s ease-in-out" }}>
 
-      {/* ── Left Sidebar (separate component) ── */}
       <Sidebar
         open={sidebarOpen}
         onOpen={() => setSidebarOpen(true)}
@@ -299,10 +285,8 @@ export default function ChatPage() {
         onLogout={handleLogout}
       />
 
-      {/* ── Main ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
 
-        {/* Messages */}
         <div style={{ flex: 1, overflowY: "auto", padding: isEmpty ? "0" : "2rem 1rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
 
           {isEmpty && (
@@ -353,13 +337,10 @@ export default function ChatPage() {
                       <button
                         onClick={() => { setMaterialContent(m.content); setMaterialOpen(true); }}
                         style={{
-                          alignSelf: "flex-start",
-                          display: "inline-flex", alignItems: "center", gap: "5px",
+                          alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: "5px",
                           background: "none", border: "1px solid rgba(255,255,255,0.08)",
-                          borderRadius: "6px", padding: "4px 10px",
-                          cursor: "pointer", color: "#475569", fontSize: "11px",
-                          fontFamily: "monospace", letterSpacing: "0.04em",
-                          transition: "all 0.2s",
+                          borderRadius: "6px", padding: "4px 10px", cursor: "pointer",
+                          color: "#475569", fontSize: "11px", fontFamily: "monospace", letterSpacing: "0.04em", transition: "all 0.2s",
                         }}
                         onMouseEnter={e => { e.currentTarget.style.color = "#60a5fa"; e.currentTarget.style.borderColor = "rgba(96,165,250,0.3)"; e.currentTarget.style.background = "rgba(96,165,250,0.05)"; }}
                         onMouseLeave={e => { e.currentTarget.style.color = "#475569"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.background = "none"; }}
@@ -371,35 +352,16 @@ export default function ChatPage() {
                 </div>
               ))}
 
-              {/* ── Thinking indicator with live phase text ── */}
               {isLoading && (
                 <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-                  <div style={{
-                    width: "30px", height: "30px", borderRadius: "8px",
-                    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "11px", fontFamily: "monospace", color: "#475569", flexShrink: 0,
-                  }}>N</div>
-                  <div style={{
-                    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
-                    borderRadius: "4px 16px 16px 16px", padding: "12px 16px",
-                    display: "flex", alignItems: "center", gap: "10px",
-                  }}>
-                    {/* Animated dots */}
+                  <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontFamily: "monospace", color: "#475569", flexShrink: 0 }}>N</div>
+                  <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "4px 16px 16px 16px", padding: "12px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
                     <div style={{ display: "flex", gap: "4px", alignItems: "center", flexShrink: 0 }}>
                       {[0, 1, 2].map(i => (
-                        <span key={i} style={{
-                          width: "5px", height: "5px", borderRadius: "50%", background: "#3b82f6",
-                          display: "inline-block", animation: "pulse 1.2s ease-in-out infinite",
-                          animationDelay: `${i * 0.2}s`,
-                        }} />
+                        <span key={i} style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#3b82f6", display: "inline-block", animation: "pulse 1.2s ease-in-out infinite", animationDelay: `${i * 0.2}s` }} />
                       ))}
                     </div>
-                    {/* Phase text */}
-                    <span key={thinkingPhase} style={{
-                      fontSize: "12px", color: "#475569", fontFamily: "monospace",
-                      letterSpacing: "0.03em", animation: "fadePhase 0.35s ease",
-                    }}>
+                    <span key={thinkingPhase} style={{ fontSize: "12px", color: "#475569", fontFamily: "monospace", letterSpacing: "0.03em", animation: "fadePhase 0.35s ease" }}>
                       {THINKING_PHASES[thinkingPhase]}
                     </span>
                   </div>
@@ -414,75 +376,34 @@ export default function ChatPage() {
         {/* Input */}
         <div style={{ flexShrink: 0, padding: "1rem 1.5rem 1.5rem", borderTop: "1px solid rgba(255,255,255,0.06)", background: "#060a10" }}>
           <div style={{ maxWidth: "700px", margin: "0 auto" }}>
+            <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", overflow: "visible", position: "relative" }}>
 
-            <div style={{
-              background: "rgba(255,255,255,0.03)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "14px",
-              overflow: "visible", /* ← must be visible so dropdown can escape */
-              position: "relative",
-            }}>
-
-              {/* ── Attachments tray ── */}
               {attachments.length > 0 && (
-                <div style={{
-                  padding: "10px 12px 0",
-                  display: "flex", flexWrap: "wrap", gap: "8px",
-                  borderBottom: "1px solid rgba(255,255,255,0.07)",
-                  paddingBottom: "10px",
-                  animation: "slideDown 0.2s ease-out",
-                }}>
+                <div style={{ padding: "10px 12px 0", display: "flex", flexWrap: "wrap", gap: "8px", borderBottom: "1px solid rgba(255,255,255,0.07)", paddingBottom: "10px", animation: "slideDown 0.2s ease-out" }}>
                   {attachments.map((a, idx) => (
-                    <div key={a.id} style={{
-                      position: "relative", borderRadius: "8px",
-                      overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", flexShrink: 0,
-                      animation: `slideInLeft 0.2s ease-out ${idx * 50}ms both`,
-                      cursor: "pointer",
-                      transition: "all 0.2s",
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(59,130,246,0.4)"; e.currentTarget.style.boxShadow = "0 0 8px rgba(59,130,246,0.2)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.boxShadow = "none"; }}
-                    onClick={() => {
-                      // Open material panel with file preview
-                      if (a.kind === "image") {
-                        setMaterialContent(`<img src="${a.dataUrl}" alt="${a.name}" style="max-width: 100%; height: auto;" />`);
-                      } else {
-                        setMaterialContent(`FILE: ${a.name}\n\nType: ${a.type}\nSize: ${(a.size / 1024).toFixed(2)} KB\n\nContent preview or download available in Material Panel.`);
-                      }
-                      setMaterialOpen(true);
-                    }}>
+                    <div key={a.id} style={{ position: "relative", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", flexShrink: 0, animation: `slideInLeft 0.2s ease-out ${idx * 50}ms both`, cursor: "pointer", transition: "all 0.2s" }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(59,130,246,0.4)"; e.currentTarget.style.boxShadow = "0 0 8px rgba(59,130,246,0.2)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.boxShadow = "none"; }}
+                      onClick={() => {
+                        if (a.kind === "image") {
+                          setMaterialContent(`<img src="${a.dataUrl}" alt="${a.name}" style="max-width: 100%; height: auto;" />`);
+                        } else {
+                          setMaterialContent(`FILE: ${a.name}\n\nType: ${a.type}\nSize: ${(a.size / 1024).toFixed(2)} KB`);
+                        }
+                        setMaterialOpen(true);
+                      }}>
                       {a.kind === "image" ? (
                         <div style={{ position: "relative", width: "72px", height: "72px" }}>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={a.dataUrl} alt={a.name} style={{ width: "72px", height: "72px", objectFit: "cover", display: "block" }} />
-                          <div style={{
-                            position: "absolute", bottom: 0, left: 0, right: 0,
-                            background: "rgba(0,0,0,0.55)", padding: "2px 5px",
-                            fontSize: "9px", fontFamily: "monospace", color: "#94a3b8",
-                            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                          }}>{a.name}</div>
-                          <button onClick={(e) => { e.stopPropagation(); removeAttachment(a.id); }} style={{
-                            position: "absolute", top: "3px", right: "3px",
-                            width: "16px", height: "16px", borderRadius: "50%",
-                            background: "rgba(0,0,0,0.7)", border: "none", cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            color: "#cbd5e1", padding: 0,
-                          }}><IconClose /></button>
+                          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(0,0,0,0.55)", padding: "2px 5px", fontSize: "9px", fontFamily: "monospace", color: "#94a3b8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}</div>
+                          <button onClick={(e) => { e.stopPropagation(); removeAttachment(a.id); }} style={{ position: "absolute", top: "3px", right: "3px", width: "16px", height: "16px", borderRadius: "50%", background: "rgba(0,0,0,0.7)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#cbd5e1", padding: 0 }}><IconClose /></button>
                         </div>
                       ) : (
-                        <div style={{
-                          display: "flex", alignItems: "center", gap: "6px",
-                          padding: "6px 10px 6px 8px", background: "rgba(255,255,255,0.04)", maxWidth: "180px",
-                        }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px 6px 8px", background: "rgba(255,255,255,0.04)", maxWidth: "180px" }}>
                           <span style={{ color: "#60a5fa", flexShrink: 0, display: "flex" }}><IconFile /></span>
-                          <span style={{
-                            fontSize: "11px", fontFamily: "monospace", color: "#93c5fd",
-                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1,
-                          }}>{a.name}</span>
-                          <button onClick={(e) => { e.stopPropagation(); removeAttachment(a.id); }} style={{
-                            background: "none", border: "none", cursor: "pointer",
-                            color: "#475569", display: "flex", padding: "1px", flexShrink: 0, transition: "color 0.15s",
-                          }}
+                          <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#93c5fd", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{a.name}</span>
+                          <button onClick={(e) => { e.stopPropagation(); removeAttachment(a.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#475569", display: "flex", padding: "1px", flexShrink: 0, transition: "color 0.15s" }}
                             onMouseEnter={e => e.currentTarget.style.color = "#94a3b8"}
                             onMouseLeave={e => e.currentTarget.style.color = "#475569"}
                           ><IconClose /></button>
@@ -493,48 +414,23 @@ export default function ChatPage() {
                 </div>
               )}
 
-              {/* ── Text row ── */}
               <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", padding: "10px 12px" }}>
-
                 <input ref={fileInputRef} type="file" multiple accept=".pdf,.txt,.doc,.docx,.csv,.md" style={{ display: "none" }} onChange={handleFileInput} />
                 <input ref={imageInputRef} type="file" multiple accept="image/*" style={{ display: "none" }} onChange={handleImageInput} />
 
-                {/* + button with dropdown — positioned absolutely so it can overflow */}
                 <div ref={dropdownRef} style={{ position: "relative", flexShrink: 0, zIndex: 100 }}>
-                  <button
-                    onClick={() => setPlusOpen(p => !p)}
-                    title="Attach image or file"
-                    style={{
-                      width: "34px", height: "34px", borderRadius: "8px",
-                      background: plusOpen ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.04)",
-                      border: plusOpen ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.08)",
-                      cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                      color: plusOpen ? "#60a5fa" : "#475569",
-                      transition: "all 0.15s",
-                      transform: plusOpen ? "rotate(45deg)" : "rotate(0deg)",
-                    }}
+                  <button onClick={() => setPlusOpen(p => !p)} title="Attach image or file"
+                    style={{ width: "34px", height: "34px", borderRadius: "8px", background: plusOpen ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.04)", border: plusOpen ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.08)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: plusOpen ? "#60a5fa" : "#475569", transition: "all 0.15s", transform: plusOpen ? "rotate(45deg)" : "rotate(0deg)" }}
                     onMouseEnter={e => { if (!plusOpen) { e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)"; e.currentTarget.style.color = "#94a3b8"; }}}
                     onMouseLeave={e => { if (!plusOpen) { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#475569"; }}}
                   >
                     <IconPlus />
                   </button>
 
-                  {/* Dropdown — anchored near the button */}
                   {plusOpen && (
-                    <div style={{
-                      position: "absolute",
-                      bottom: "calc(100% + 8px)",
-                      left: "0",
-                      background: "#0d1424", border: "1px solid rgba(255,255,255,0.1)",
-                      borderRadius: "10px", overflow: "hidden",
-                      boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
-                      minWidth: "175px",
-                      zIndex: 9999,
-                      animation: "slideUpSmooth 0.2s cubic-bezier(0.34,1.4,0.64,1)",
-                    }}>
+                    <div style={{ position: "absolute", bottom: "calc(100% + 8px)", left: "0", background: "#0d1424", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.6)", minWidth: "175px", zIndex: 9999, animation: "slideUpSmooth 0.2s cubic-bezier(0.34,1.4,0.64,1)" }}>
                       <button
                         onClick={() => {
-                          // Create a file input that accepts both images and files
                           const input = document.createElement("input");
                           input.type = "file";
                           input.multiple = true;
@@ -549,19 +445,11 @@ export default function ChatPage() {
                           };
                           input.click();
                         }}
-                        style={{
-                          display: "flex", alignItems: "center", gap: "10px",
-                          width: "100%", padding: "12px 14px",
-                          background: "none", border: "none", cursor: "pointer",
-                          color: "#94a3b8", fontSize: "13px", fontFamily: "Georgia, serif",
-                          textAlign: "left", transition: "all 0.15s",
-                        }}
+                        style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: "13px", fontFamily: "Georgia, serif", textAlign: "left", transition: "all 0.15s" }}
                         onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "#e2e8f0"; }}
                         onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "#94a3b8"; }}
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                        </svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                         <span>Attach Image/File</span>
                       </button>
                     </div>
@@ -574,26 +462,13 @@ export default function ChatPage() {
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   onPaste={handlePaste}
-                  placeholder={attachments.length > 0 ? `Add a message or just send…` : "Ask about your thesis…"}
+                  placeholder={attachments.length > 0 ? "Add a message or just send…" : "Ask about your thesis…"}
                   rows={1}
-                  style={{
-                    flex: 1, background: "none", border: "none", outline: "none",
-                    color: "#e2e8f0", fontSize: "14px", fontFamily: "Georgia, serif",
-                    lineHeight: "1.6", resize: "none", maxHeight: "140px", overflowY: "auto",
-                  }}
+                  style={{ flex: 1, background: "none", border: "none", outline: "none", color: "#e2e8f0", fontSize: "14px", fontFamily: "Georgia, serif", lineHeight: "1.6", resize: "none", maxHeight: "140px", overflowY: "auto" }}
                   onInput={e => { e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px"; }}
                 />
-                <button
-                  onClick={handleSend}
-                  disabled={isLoading || (!input.trim() && attachments.length === 0)}
-                  style={{
-                    width: "34px", height: "34px", borderRadius: "8px",
-                    background: (input.trim() || attachments.length > 0) && !isLoading ? "#1d4ed8" : "rgba(255,255,255,0.05)",
-                    border: "none", cursor: (input.trim() || attachments.length > 0) && !isLoading ? "pointer" : "default",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    flexShrink: 0, transition: "background 0.15s",
-                    fontSize: "16px", color: (input.trim() || attachments.length > 0) && !isLoading ? "#fff" : "#334155",
-                  }}
+                <button onClick={handleSend} disabled={isLoading || (!input.trim() && attachments.length === 0)}
+                  style={{ width: "34px", height: "34px", borderRadius: "8px", background: (input.trim() || attachments.length > 0) && !isLoading ? "#1d4ed8" : "rgba(255,255,255,0.05)", border: "none", cursor: (input.trim() || attachments.length > 0) && !isLoading ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.15s", fontSize: "16px", color: (input.trim() || attachments.length > 0) && !isLoading ? "#fff" : "#334155" }}
                 >↑</button>
               </div>
             </div>
@@ -603,24 +478,16 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* ── Right Material Panel (separate component) ── */}
-      <MaterialPanel
-        open={materialOpen}
-        content={materialContent}
-        onClose={() => setMaterialOpen(false)}
-      />
+      <MaterialPanel open={materialOpen} content={materialContent} onClose={() => setMaterialOpen(false)} />
 
-      {/* ── Auth Modal ── */}
+      {/* AuthModal no longer needs onAuthSuccess — auth state comes from onAuthStateChange */}
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-        isAuthenticated={!!user}
-        onAuthSuccess={(userData) => setUser(userData)}
       />
 
       <style>{`
         @keyframes pulse { 0%,100%{opacity:.3;transform:scale(.8)} 50%{opacity:1;transform:scale(1)} }
-        @keyframes dropIn { from{opacity:0;transform:translateY(calc(-100% - 50px)) scale(0.97)} to{opacity:1;transform:translateY(calc(-100% - 44px)) scale(1)} }
         @keyframes fadePhase { from{opacity:0;transform:translateY(3px)} to{opacity:1;transform:translateY(0)} }
         @keyframes fadeInHard { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
         @keyframes fadeInUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }

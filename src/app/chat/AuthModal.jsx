@@ -19,9 +19,9 @@ const IconGoogle = () => (
   </svg>
 );
 
-export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
+export default function AuthModal({ isOpen, onClose }) {
   const [isSignup, setIsSignup] = useState(true);
-  const [step, setStep] = useState("form"); // "form" or "verify"
+  const [step, setStep] = useState("form"); // "form" | "verify"
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -40,7 +40,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) strength++;
     if (/[0-9]/.test(pwd)) strength++;
     if (/[^a-zA-Z0-9]/.test(pwd)) strength++;
-    
     if (strength <= 1) return { strength: 1, label: "Weak", color: "#ef4444" };
     if (strength <= 2) return { strength: 2, label: "Medium", color: "#f59e0b" };
     return { strength: 3, label: "Strong", color: "#22c55e" };
@@ -48,9 +47,41 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
 
   const pwdStrength = getPasswordStrength(password);
 
+  function resetForm() {
+    setFirstName(""); setLastName(""); setEmail(""); setPassword("");
+    setConfirmPassword(""); setVerificationCode(""); setError(""); setStep("form");
+  }
+
+  function handleClose() {
+    resetForm();
+    onClose();
+  }
+
   if (!isOpen) return null;
 
+  // ── OTP verification step ──────────────────────────────────
   if (step === "verify") {
+    async function handleVerify(e) {
+      e.preventDefault();
+      if (!verificationCode.trim()) { setError("Verification code is required"); return; }
+      setLoading(true);
+      setError("");
+      try {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          email,
+          token: verificationCode.trim(),
+          type: "signup",
+        });
+        if (verifyError) throw verifyError;
+        // onAuthStateChange in page.jsx handles the rest — just close.
+        handleClose();
+      } catch (err) {
+        setError(err?.message || "Verification failed. Check the code and try again.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
     return (
       <div style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
@@ -60,48 +91,39 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         <div style={{
           background: "#0a0f1a", border: "1px solid rgba(255,255,255,0.1)",
           borderRadius: "16px", padding: "2.5rem", maxWidth: "400px", width: "90%",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
-          position: "relative",
-          animation: "slideUpSmooth 0.3s ease-out",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.8)", position: "relative",
         }}>
           <div style={{ marginBottom: "2rem", textAlign: "center" }}>
-            <h2 style={{
-              fontSize: "24px", fontWeight: "600", color: "#e2e8f0",
-              marginBottom: "0.5rem", fontFamily: "Georgia, serif",
-            }}>
+            <h2 style={{ fontSize: "24px", fontWeight: "600", color: "#e2e8f0", marginBottom: "0.5rem", fontFamily: "Georgia, serif" }}>
               Verify Email
             </h2>
             <p style={{ fontSize: "13px", color: "#475569", fontFamily: "Georgia, serif" }}>
-              We sent a verification code to {email}
+              We sent a 6-digit code to <strong style={{ color: "#94a3b8" }}>{email}</strong>
             </p>
           </div>
 
-          <form onSubmit={(e) => { e.preventDefault(); handleVerify(); }} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <form onSubmit={handleVerify} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             {error && (
-              <div style={{
-                background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
-                borderRadius: "8px", padding: "12px", fontSize: "13px", color: "#fca5a5",
-                fontFamily: "Georgia, serif",
-              }}>
+              <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", padding: "12px", fontSize: "13px", color: "#fca5a5", fontFamily: "Georgia, serif" }}>
                 {error}
               </div>
             )}
-
             <input
               type="text"
-              placeholder="Verification code"
+              inputMode="numeric"
+              placeholder="6-digit code"
               value={verificationCode}
               onChange={e => setVerificationCode(e.target.value)}
+              autoFocus
               style={{
                 background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
                 borderRadius: "8px", padding: "12px", color: "#e2e8f0",
                 fontSize: "14px", fontFamily: "Georgia, serif", outline: "none",
-                transition: "border-color 0.15s",
+                letterSpacing: "0.2em", textAlign: "center",
               }}
               onFocus={e => e.target.style.borderColor = "rgba(59,130,246,0.5)"}
               onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
             />
-
             <button
               type="submit"
               disabled={loading}
@@ -109,27 +131,17 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
                 background: "#1d4ed8", color: "#fff", border: "none",
                 borderRadius: "8px", padding: "12px", fontSize: "14px",
                 fontFamily: "Georgia, serif", cursor: loading ? "not-allowed" : "pointer",
-                transition: "background 0.15s", opacity: loading ? 0.7 : 1,
-                fontWeight: "500",
+                opacity: loading ? 0.7 : 1, fontWeight: "500",
               }}
-              onMouseEnter={e => { if (!loading) e.currentTarget.style.background = "#1e40af"; }}
-              onMouseLeave={e => { if (!loading) e.currentTarget.style.background = "#1d4ed8"; }}
             >
-              {loading ? "Verifying…" : "Verify"}
+              {loading ? "Verifying…" : "Verify & Sign In"}
             </button>
-
             <button
               type="button"
               onClick={() => { setStep("form"); setError(""); }}
-              style={{
-                background: "transparent", color: "#60a5fa", border: "none",
-                cursor: "pointer", fontSize: "13px", fontFamily: "Georgia, serif",
-                transition: "color 0.15s",
-              }}
-              onMouseEnter={e => e.currentTarget.style.color = "#93c5fd"}
-              onMouseLeave={e => e.currentTarget.style.color = "#60a5fa"}
+              style={{ background: "transparent", color: "#60a5fa", border: "none", cursor: "pointer", fontSize: "13px", fontFamily: "Georgia, serif" }}
             >
-              Back to form
+              Back
             </button>
           </form>
         </div>
@@ -137,6 +149,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     );
   }
 
+  // ── Main form ──────────────────────────────────────────────
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
@@ -144,57 +157,45 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
 
     try {
       if (isSignup) {
-        if (!firstName || !lastName || !email || !password || !confirmPassword) {
-          setError("All fields are required");
-          setLoading(false);
-          return;
+        if (!firstName.trim() || !lastName.trim() || !email || !password || !confirmPassword) {
+          setError("All fields are required"); return;
         }
         if (password !== confirmPassword) {
-          setError("Passwords do not match");
-          setLoading(false);
-          return;
+          setError("Passwords do not match"); return;
         }
         if (password.length < 8) {
-          setError("Password must be at least 8 characters");
-          setLoading(false);
-          return;
+          setError("Password must be at least 8 characters"); return;
         }
-        // Mock signup
-        console.log("Signing up:", { firstName, lastName, email, password });
-        // Move to verification step
+
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: `${firstName.trim()} ${lastName.trim()}`,
+              first_name: firstName.trim(),
+              last_name: lastName.trim(),
+            },
+          },
+        });
+
+        if (signUpError) throw signUpError;
+
+        // Supabase sends an OTP/confirmation email — move to verify step.
         setStep("verify");
       } else {
         if (!email || !password) {
-          setError("Email and password are required");
-          setLoading(false);
-          return;
+          setError("Email and password are required"); return;
         }
-        // Mock login
-        console.log("Logging in:", { email, password });
-        onAuthSuccess({ name: "User", plan: "Free plan" });
-        onClose();
-      }
-    } catch {
-      setError("Authentication failed");
-    } finally {
-      setLoading(false);
-    }
-  }
 
-  async function handleVerify() {
-    if (!verificationCode) {
-      setError("Verification code is required");
-      return;
-    }
-    setLoading(true);
-    try {
-      // Mock verification
-      console.log("Verifying with code:", verificationCode);
-      onAuthSuccess({ name: `${firstName} ${lastName}`, plan: "Free plan" });
-      onClose();
-      setStep("form");
-    } catch {
-      setError("Verification failed");
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) throw signInError;
+
+        // onAuthStateChange in page.jsx picks this up — just close.
+        handleClose();
+      }
+    } catch (err) {
+      setError(err?.message || "Authentication failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -204,26 +205,27 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     setError("");
     setLoading(true);
     try {
-      const redirectTo = `${window.location.origin}/auth/callback?next=/chat`;
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo,
-          queryParams: {
-            access_type: "offline",
-            prompt: "consent",
-          },
+          redirectTo: `${window.location.origin}/auth/callback?next=/chat`,
+          queryParams: { access_type: "offline", prompt: "consent" },
         },
       });
-
       if (oauthError) throw oauthError;
+      // Page redirects away — no further action needed.
     } catch (err) {
       setError(err?.message || "Google authentication failed");
       setLoading(false);
-    } finally {
-      // A successful OAuth request redirects away from this page.
     }
   }
+
+  const inputStyle = {
+    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "8px", padding: "12px", color: "#e2e8f0",
+    fontSize: "14px", fontFamily: "Georgia, serif", outline: "none",
+    transition: "border-color 0.15s", width: "100%", boxSizing: "border-box",
+  };
 
   return (
     <div style={{
@@ -234,30 +236,17 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       <div style={{
         background: "#0a0f1a", border: "1px solid rgba(255,255,255,0.1)",
         borderRadius: "16px", padding: "2.5rem", maxWidth: "400px", width: "90%",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
-        position: "relative",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.8)", position: "relative",
       }}>
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          style={{
-            position: "absolute", top: "1rem", right: "1rem",
-            background: "none", border: "none", cursor: "pointer",
-            color: "#475569", display: "flex", alignItems: "center",
-            transition: "color 0.15s",
-          }}
+        {/* Close */}
+        <button onClick={handleClose} style={{ position: "absolute", top: "1rem", right: "1rem", background: "none", border: "none", cursor: "pointer", color: "#475569", display: "flex", alignItems: "center", transition: "color 0.15s" }}
           onMouseEnter={e => e.currentTarget.style.color = "#94a3b8"}
           onMouseLeave={e => e.currentTarget.style.color = "#475569"}
-        >
-          <IconClose />
-        </button>
+        ><IconClose /></button>
 
         {/* Header */}
         <div style={{ marginBottom: "2rem", textAlign: "center" }}>
-          <h2 style={{
-            fontSize: "24px", fontWeight: "600", color: "#e2e8f0",
-            marginBottom: "0.5rem", fontFamily: "Georgia, serif",
-          }}>
+          <h2 style={{ fontSize: "24px", fontWeight: "600", color: "#e2e8f0", marginBottom: "0.5rem", fontFamily: "Georgia, serif" }}>
             {isSignup ? "Create Account" : "Welcome Back"}
           </h2>
           <p style={{ fontSize: "13px", color: "#475569", fontFamily: "Georgia, serif" }}>
@@ -268,186 +257,87 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {error && (
-            <div style={{
-              background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
-              borderRadius: "8px", padding: "12px", fontSize: "13px", color: "#fca5a5",
-              fontFamily: "Georgia, serif",
-            }}>
+            <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", padding: "12px", fontSize: "13px", color: "#fca5a5", fontFamily: "Georgia, serif" }}>
               {error}
             </div>
           )}
 
           {isSignup && (
             <>
-              <input
-                type="text"
-                placeholder="First Name"
-                value={firstName}
-                onChange={e => setFirstName(e.target.value)}
-                style={{
-                  background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: "8px", padding: "12px", color: "#e2e8f0",
-                  fontSize: "14px", fontFamily: "Georgia, serif", outline: "none",
-                  transition: "border-color 0.15s",
-                }}
+              <input type="text" placeholder="First Name" value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle}
                 onFocus={e => e.target.style.borderColor = "rgba(59,130,246,0.5)"}
                 onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
               />
-              <input
-                type="text"
-                placeholder="Last Name"
-                value={lastName}
-                onChange={e => setLastName(e.target.value)}
-                style={{
-                  background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: "8px", padding: "12px", color: "#e2e8f0",
-                  fontSize: "14px", fontFamily: "Georgia, serif", outline: "none",
-                  transition: "border-color 0.15s",
-                }}
+              <input type="text" placeholder="Last Name" value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle}
                 onFocus={e => e.target.style.borderColor = "rgba(59,130,246,0.5)"}
                 onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
               />
             </>
           )}
 
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            style={{
-              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "8px", padding: "12px", color: "#e2e8f0",
-              fontSize: "14px", fontFamily: "Georgia, serif", outline: "none",
-              transition: "border-color 0.15s",
-            }}
+          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle}
             onFocus={e => e.target.style.borderColor = "rgba(59,130,246,0.5)"}
             onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
           />
 
-          {/* Password field with show/hide toggle */}
+          {/* Password */}
           <div style={{ position: "relative" }}>
             <input
-              type={showPassword ? "text" : "password"}
-              placeholder="Password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              style={{
-                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
-                borderRadius: "8px", padding: "12px", paddingRight: "40px", color: "#e2e8f0",
-                fontSize: "14px", fontFamily: "Georgia, serif", outline: "none",
-                transition: "border-color 0.15s", width: "100%", boxSizing: "border-box",
-              }}
+              type={showPassword ? "text" : "password"} placeholder="Password"
+              value={password} onChange={e => setPassword(e.target.value)}
+              style={{ ...inputStyle, paddingRight: "40px" }}
               onFocus={e => e.target.style.borderColor = "rgba(59,130,246,0.5)"}
               onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              style={{
-                position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)",
-                background: "none", border: "none", color: "#94a3b8", cursor: "pointer",
-                fontSize: "16px", padding: "0", display: "flex", alignItems: "center",
-                transition: "color 0.15s",
-              }}
-              onMouseEnter={e => e.currentTarget.style.color = "#cbd5e1"}
-              onMouseLeave={e => e.currentTarget.style.color = "#94a3b8"}
-            >
+            <button type="button" onClick={() => setShowPassword(!showPassword)}
+              style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "16px", padding: "0", display: "flex", alignItems: "center" }}>
               {showPassword ? "👁" : "👁‍🗨"}
             </button>
           </div>
 
-          {/* Password strength indicator (only on signup) */}
+          {/* Password strength */}
           {isSignup && password && (
-            <div style={{
-              display: "flex", alignItems: "center", gap: "8px", fontSize: "12px",
-              fontFamily: "Georgia, serif",
-            }}>
-              <div style={{
-                flex: 1, display: "flex", gap: "3px", height: "4px",
-              }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", fontFamily: "Georgia, serif" }}>
+              <div style={{ flex: 1, display: "flex", gap: "3px", height: "4px" }}>
                 {[1, 2, 3].map(i => (
-                  <div
-                    key={i}
-                    style={{
-                      flex: 1, borderRadius: "2px",
-                      background: i <= pwdStrength.strength 
-                        ? pwdStrength.color 
-                        : "rgba(255,255,255,0.1)",
-                      transition: "background 0.15s",
-                    }}
-                  />
+                  <div key={i} style={{ flex: 1, borderRadius: "2px", background: i <= pwdStrength.strength ? pwdStrength.color : "rgba(255,255,255,0.1)", transition: "background 0.15s" }} />
                 ))}
               </div>
-              <span style={{
-                color: pwdStrength.color,
-                minWidth: "50px",
-                transition: "color 0.15s",
-              }}>
-                {pwdStrength.label}
-              </span>
+              <span style={{ color: pwdStrength.color, minWidth: "50px" }}>{pwdStrength.label}</span>
             </div>
           )}
 
-          {/* Confirm password field (only on signup) */}
+          {/* Confirm password */}
           {isSignup && (
-            <div style={{ position: "relative" }}>
-              <input
-                type={showConfirmPassword ? "text" : "password"}
-                placeholder="Confirm password"
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                style={{
-                  background: "rgba(255,255,255,0.04)", border: password && confirmPassword && password !== confirmPassword 
-                    ? "1px solid rgba(239,68,68,0.5)"
-                    : "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: "8px", padding: "12px", paddingRight: "40px", color: "#e2e8f0",
-                  fontSize: "14px", fontFamily: "Georgia, serif", outline: "none",
-                  transition: "border-color 0.15s", width: "100%", boxSizing: "border-box",
-                }}
-                onFocus={e => e.target.style.borderColor = password && confirmPassword && password !== confirmPassword ? "rgba(239,68,68,0.5)" : "rgba(59,130,246,0.5)"}
-                onBlur={e => e.target.style.borderColor = password && confirmPassword && password !== confirmPassword ? "rgba(239,68,68,0.5)" : "rgba(255,255,255,0.1)"}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={{
-                  position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)",
-                  background: "none", border: "none", color: "#94a3b8", cursor: "pointer",
-                  fontSize: "16px", padding: "0", display: "flex", alignItems: "center",
-                  transition: "color 0.15s",
-                }}
-                onMouseEnter={e => e.currentTarget.style.color = "#cbd5e1"}
-                onMouseLeave={e => e.currentTarget.style.color = "#94a3b8"}
-              >
-                {showConfirmPassword ? "👁" : "👁‍🗨"}
-              </button>
-            </div>
+            <>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showConfirmPassword ? "text" : "password"} placeholder="Confirm password"
+                  value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                  style={{
+                    ...inputStyle, paddingRight: "40px",
+                    borderColor: password && confirmPassword && password !== confirmPassword ? "rgba(239,68,68,0.5)" : "rgba(255,255,255,0.1)",
+                  }}
+                  onFocus={e => e.target.style.borderColor = password && confirmPassword && password !== confirmPassword ? "rgba(239,68,68,0.5)" : "rgba(59,130,246,0.5)"}
+                  onBlur={e => e.target.style.borderColor = password && confirmPassword && password !== confirmPassword ? "rgba(239,68,68,0.5)" : "rgba(255,255,255,0.1)"}
+                />
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "16px", padding: "0", display: "flex", alignItems: "center" }}>
+                  {showConfirmPassword ? "👁" : "👁‍🗨"}
+                </button>
+              </div>
+              {password && confirmPassword && password !== confirmPassword && (
+                <div style={{ fontSize: "12px", color: "#fca5a5", fontFamily: "Georgia, serif" }}>Passwords do not match</div>
+              )}
+            </>
           )}
 
-          {/* Password mismatch warning */}
-          {isSignup && password && confirmPassword && password !== confirmPassword && (
-            <div style={{
-              fontSize: "12px", color: "#fca5a5", fontFamily: "Georgia, serif",
-            }}>
-              Passwords do not match
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              background: "#1d4ed8", color: "#fff", border: "none",
-              borderRadius: "8px", padding: "12px", fontSize: "14px",
-              fontFamily: "Georgia, serif", cursor: loading ? "not-allowed" : "pointer",
-              transition: "background 0.15s", opacity: loading ? 0.7 : 1,
-              fontWeight: "500",
-            }}
+          <button type="submit" disabled={loading}
+            style={{ background: "#1d4ed8", color: "#fff", border: "none", borderRadius: "8px", padding: "12px", fontSize: "14px", fontFamily: "Georgia, serif", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, fontWeight: "500" }}
             onMouseEnter={e => { if (!loading) e.currentTarget.style.background = "#1e40af"; }}
             onMouseLeave={e => { if (!loading) e.currentTarget.style.background = "#1d4ed8"; }}
           >
-            {loading ? "Please wait…" : (isSignup ? "Continue to Verify" : "Sign In")}
+            {loading ? "Please wait…" : (isSignup ? "Continue" : "Sign In")}
           </button>
         </form>
 
@@ -458,35 +348,20 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.1)" }} />
         </div>
 
-        {/* Google Button */}
-        <button
-          onClick={handleGoogleAuth}
-          disabled={loading}
-          style={{
-            width: "100%",
-            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
-            borderRadius: "8px", padding: "11px 16px", fontSize: "14px",
-            fontFamily: "Georgia, serif", color: "#e2e8f0", cursor: loading ? "not-allowed" : "pointer",
-            transition: "all 0.2s", display: "flex", alignItems: "center",
-            justifyContent: "center", gap: "10px", opacity: loading ? 0.7 : 1,
-            boxSizing: "border-box",
-          }}
-          onMouseEnter={e => { if (!loading) { e.currentTarget.style.background = "rgba(255,255,255,0.09)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.22)"; e.currentTarget.style.transform = "translateY(-1px)"; }}}
-          onMouseLeave={e => { if (!loading) { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.transform = "translateY(0)"; }}}
+        {/* Google */}
+        <button onClick={handleGoogleAuth} disabled={loading}
+          style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "8px", padding: "11px 16px", fontSize: "14px", fontFamily: "Georgia, serif", color: "#e2e8f0", cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", opacity: loading ? 0.7 : 1, boxSizing: "border-box" }}
+          onMouseEnter={e => { if (!loading) { e.currentTarget.style.background = "rgba(255,255,255,0.09)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.22)"; }}}
+          onMouseLeave={e => { if (!loading) { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; }}}
         >
           <IconGoogle /> Continue with Google
         </button>
 
-        {/* Toggle link */}
+        {/* Toggle */}
         <div style={{ textAlign: "center", marginTop: "1.5rem", fontSize: "13px", color: "#475569", fontFamily: "Georgia, serif" }}>
           {isSignup ? "Already have an account?" : "Don't have an account?"}{" "}
-          <button
-            onClick={() => setIsSignup(!isSignup)}
-            style={{
-              background: "none", border: "none", cursor: "pointer",
-              color: "#60a5fa", fontFamily: "Georgia, serif", fontSize: "13px",
-              transition: "color 0.15s",
-            }}
+          <button onClick={() => { setIsSignup(!isSignup); setError(""); }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#60a5fa", fontFamily: "Georgia, serif", fontSize: "13px" }}
             onMouseEnter={e => e.currentTarget.style.color = "#93c5fd"}
             onMouseLeave={e => e.currentTarget.style.color = "#60a5fa"}
           >

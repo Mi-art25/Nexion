@@ -77,6 +77,11 @@ function shouldSearchScholar(message) {
   return researchSignals.some(word => lower.includes(word));
 }
 
+// ─── Strip markdown bold markers (**text** → text) ────────────
+function stripBold(text) {
+  return text.replace(/\*\*(.*?)\*\*/g, "$1");
+}
+
 // ─── Route Handler ────────────────────────────────────────────
 export async function POST(req) {
   try {
@@ -114,7 +119,7 @@ export async function POST(req) {
     });
 
     return Response.json({
-      reply: text,
+      reply: stripBold(text),
       provider,
       // Let frontend know if Scholar results were used
       scholarUsed: scholarContext.length > 0,
