@@ -65,7 +65,7 @@ export async function callOpenRouter(messages, systemPrompt = "") {
       "X-Title": "Nexion Thesis AI",
     },
     body: JSON.stringify({
-      model: "meta-llama/llama-3.1-8b-instruct:free",
+      model: "mistralai/mistral-7b-instruct:free",
       messages: [
         ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
         ...messages,
