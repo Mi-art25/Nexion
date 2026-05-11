@@ -1,6 +1,7 @@
 "use client";
 
 import { useNexionChat } from "@/hooks/useNexionChat";
+import { useChats } from "@/hooks/useChats";
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import Sidebar from "./Sidebar";
@@ -48,14 +49,12 @@ const THINKING_PHASES = [
 ];
 
 export default function ChatPage() {
-  const { messages, isLoading, sendMessage, clearMessages } = useNexionChat();
+  const { messages, isLoading, sendMessage, clearMessages, setMessages } = useNexionChat();
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [materialOpen, setMaterialOpen] = useState(false);
   const [materialContent, setMaterialContent] = useState("");
-
-  const [recents, setRecents] = useState([]);
 
   // Auth — driven entirely by supabase.auth.onAuthStateChange
   const [user, setUser] = useState(null);
@@ -89,28 +88,36 @@ export default function ChatPage() {
   // ── Supabase auth listener ─────────────────────────────────
   useEffect(() => {
     let mounted = true;
-
-    // Hydrate on mount
     supabase.auth.getSession().then(({ data }) => {
       if (mounted) setUser(userFromSession(data.session));
     });
-
-    // React to sign-in / sign-out / token refresh
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(userFromSession(session));
-      if (session) setAuthModalOpen(false); // close modal on successful login
+      if (session) setAuthModalOpen(false);
     });
-
     return () => {
       mounted = false;
       listener.subscription.unsubscribe();
     };
   }, []);
 
+  // ── Chat persistence hook ──────────────────────────────────
+  const {
+    recents,
+    loadChat,
+    saveMessage,
+    startNewChat,
+    toggleFavorite,
+    renameChat,
+    deleteChat,
+  } = useChats(user?.id ?? null);
+
+  // ── Scroll to bottom on new messages ──────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
+  // ── Thinking phase cycling ─────────────────────────────────
   useEffect(() => {
     if (!isLoading) { setThinkingPhase(0); return; }
     const interval = setInterval(() => {
@@ -119,6 +126,7 @@ export default function ChatPage() {
     return () => clearInterval(interval);
   }, [isLoading]);
 
+  // ── Auto-open MaterialPanel for long responses ─────────────
   useEffect(() => {
     if (messages.length === 0) {
       setMaterialOpen(false);
@@ -132,43 +140,17 @@ export default function ChatPage() {
     }
   }, [messages]);
 
+  // ── Page title ────────────────────────────────────────────
   useEffect(() => {
-    if (messages.length === 1 && messages[0].role === "user") {
-      const label = messages[0].content.trim().slice(0, 60) + (messages[0].content.trim().length > 60 ? "…" : "");
-      const id = Date.now().toString();
-      setRecents(prev => {
-        if (prev.some(r => r.label === label)) return prev;
-        return [{ id, label, favorited: false }, ...prev];
-      });
+    const firstUser = messages.find(m => m.role === "user");
+    if (firstUser) {
+      document.title = `${firstUser.content.trim().slice(0, 50)} — Nexion`;
+    } else {
+      document.title = "Nexion";
     }
   }, [messages]);
 
-  function toggleFavorite(id) {
-    setRecents(prev => prev.map(r => r.id === id ? { ...r, favorited: !r.favorited } : r));
-  }
-
-  function renameChat(id, newLabel) {
-    setRecents(prev => prev.map(r => r.id === id ? { ...r, label: newLabel } : r));
-  }
-
-  function deleteChat(id) {
-    setRecents(prev => prev.filter(r => r.id !== id));
-  }
-
-  function handleNewChat() {
-    const firstUser = messages.find(m => m.role === "user");
-    if (firstUser) {
-      const raw = firstUser.content.trim();
-      const label = raw.slice(0, 60) + (raw.length > 60 ? "…" : "");
-      const id = Date.now().toString();
-      setRecents(prev => {
-        if (prev.some(r => r.label === label)) return prev;
-        return [{ id, label, favorited: false }, ...prev];
-      });
-    }
-    clearMessages();
-  }
-
+  // ── Close attach dropdown on outside click ────────────────
   useEffect(() => {
     function handleClickOutside(e) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -179,6 +161,72 @@ export default function ChatPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // ── Load a past chat from the sidebar ─────────────────────
+  async function handleLoadChat(chatId) {
+    const pastMessages = await loadChat(chatId);
+    if (pastMessages.length > 0) {
+      setMessages(pastMessages); // replace current messages
+      setMaterialOpen(false);
+      setMaterialContent("");
+    }
+  }
+
+  // ── Send a message + persist both turns ───────────────────
+  async function handleSend() {
+    const trimmed = input.trim();
+    if ((!trimmed && attachments.length === 0) || isLoading) return;
+    setInput("");
+
+    const pdfAttachment = attachments.find(a => a.type === "application/pdf");
+    const userContent = trimmed || `[Attached: ${attachments.map(a => a.name).join(", ")}]`;
+
+    // Derive chat label from first user message (truncated)
+    const isFirstMessage = messages.length === 0;
+    const chatLabel = userContent.slice(0, 60) + (userContent.length > 60 ? "…" : "");
+
+    // Save user message first
+    if (isFirstMessage) {
+      await saveMessage("user", userContent, chatLabel);
+    } else {
+      await saveMessage("user", userContent);
+    }
+
+    // Send to AI
+    const reply = await sendMessage(
+      userContent,
+      pdfAttachment ? { pdfText: `[Attached PDF: ${pdfAttachment.name}]\n${pdfAttachment.dataUrl}` } : undefined
+    );
+
+    // Save assistant reply
+    if (reply) {
+      await saveMessage("assistant", reply);
+    }
+
+    setAttachments([]);
+  }
+
+  // ── New chat ───────────────────────────────────────────────
+  function handleNewChat() {
+    startNewChat();
+    clearMessages();
+    setMaterialOpen(false);
+    setMaterialContent("");
+  }
+
+  // ── Logout ────────────────────────────────────────────────
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    startNewChat();
+    clearMessages();
+    setMaterialOpen(false);
+    setMaterialContent("");
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  }
+
+  // ── File attachments ──────────────────────────────────────
   function readFileAsDataUrl(file) {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -228,43 +276,6 @@ export default function ChatPage() {
     }
   }
 
-  function handleSend() {
-    const trimmed = input.trim();
-    if ((!trimmed && attachments.length === 0) || isLoading) return;
-    setInput("");
-    const pdfAttachment = attachments.find(a => a.type === "application/pdf");
-    if (pdfAttachment) {
-      sendMessage(trimmed || `[Attached: ${attachments.map(a => a.name).join(", ")}]`, {
-        pdfText: `[Attached PDF: ${pdfAttachment.name}]\n${pdfAttachment.dataUrl}`,
-      });
-    } else {
-      sendMessage(trimmed || `[Attached: ${attachments.map(a => a.name).join(", ")}]`);
-    }
-    setAttachments([]);
-  }
-
-  function handleKeyDown(e) {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
-  }
-
-  useEffect(() => {
-    const firstUser = messages.find(m => m.role === "user");
-    if (firstUser) {
-      document.title = `${firstUser.content.trim().slice(0, 50)} — Nexion`;
-    } else {
-      document.title = "Nexion";
-    }
-  }, [messages]);
-
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    // onAuthStateChange will set user to null automatically
-    setRecents([]);
-    clearMessages();
-    setMaterialOpen(false);
-    setMaterialContent("");
-  }
-
   const isEmpty = messages.length === 0;
 
   return (
@@ -276,7 +287,11 @@ export default function ChatPage() {
         onClose={() => setSidebarOpen(false)}
         recents={recents}
         onToggleFavorite={toggleFavorite}
-        onSend={sendMessage}
+        onSend={(label) => {
+          // Find chat by label and load it
+          const chat = recents.find(r => r.label === label);
+          if (chat) handleLoadChat(chat.id);
+        }}
         onNewChat={handleNewChat}
         onRenameChat={renameChat}
         onDeleteChat={deleteChat}
@@ -480,7 +495,6 @@ export default function ChatPage() {
 
       <MaterialPanel open={materialOpen} content={materialContent} onClose={() => setMaterialOpen(false)} />
 
-      {/* AuthModal no longer needs onAuthSuccess — auth state comes from onAuthStateChange */}
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}

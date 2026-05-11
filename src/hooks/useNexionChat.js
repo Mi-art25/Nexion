@@ -6,8 +6,12 @@ export function useNexionChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastProvider, setLastProvider] = useState(null);
 
-  const sendMessage = useCallback(async (content, pdfText = null) => {
-    if (!content.trim()) return;
+  const sendMessage = useCallback(async (content, options = {}) => {
+    if (!content.trim()) return null;
+
+    // Support both old signature sendMessage(content, pdfText)
+    // and new signature sendMessage(content, { pdfText })
+    const pdfText = typeof options === "string" ? options : options?.pdfText ?? null;
 
     const userMessage = { role: "user", content, ...(pdfText && { pdfText }) };
     const updated = [...messages, userMessage];
@@ -24,13 +28,14 @@ export function useNexionChat() {
       if (!res.ok) throw new Error("Request failed");
 
       const data = await res.json();
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+      const reply = data.reply;
+      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
       setLastProvider(data.provider);
+      return reply; // ← returned so page.jsx can save it to Supabase
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Something went wrong. Please try again." },
-      ]);
+      const errorMsg = "Something went wrong. Please try again.";
+      setMessages((prev) => [...prev, { role: "assistant", content: errorMsg }]);
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -66,5 +71,13 @@ export function useNexionChat() {
     setLastProvider(null);
   }, []);
 
-  return { messages, isLoading, sendMessage, analyzePDF, clearMessages, lastProvider };
+  return {
+    messages,
+    isLoading,
+    sendMessage,
+    analyzePDF,
+    clearMessages,
+    lastProvider,
+    setMessages, // ← exposed so page.jsx can restore a past chat
+  };
 }
