@@ -258,6 +258,26 @@ export default function ChatPage() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   }
 
+  // Update browser tab title based on active chat
+  useEffect(() => {
+    const firstUser = messages.find(m => m.role === "user");
+    if (firstUser) {
+      const label = firstUser.content.trim().slice(0, 50);
+      document.title = `${label} — Nexion`;
+    } else {
+      document.title = "Nexion";
+    }
+  }, [messages]);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    setUser(null);
+    setRecents([]);
+    clearMessages();
+    setMaterialOpen(false);
+    setMaterialContent("");
+  }
+
   const isEmpty = messages.length === 0;
 
   return (
@@ -276,6 +296,7 @@ export default function ChatPage() {
         onDeleteChat={deleteChat}
         user={user}
         onLoginClick={() => setAuthModalOpen(true)}
+        onLogout={handleLogout}
       />
 
       {/* ── Main ── */}

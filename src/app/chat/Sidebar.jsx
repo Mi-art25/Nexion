@@ -269,6 +269,143 @@ function ChatItem({ item, onSend, onToggleFavorite, onRename, onDelete }) {
   );
 }
 
+// ─── Avatar Dropdown ──────────────────────────────────────────
+function AvatarDropdown({ user, collapsed = false, onLogout }) {
+  const [open, setOpen] = useState(false);
+
+  const menuStyle = collapsed ? {
+    position: "absolute",
+    bottom: "48px",
+    left: "56px",
+  } : {
+    position: "absolute",
+    bottom: "calc(100% + 8px)",
+    left: "0",
+    right: "0",
+  };
+
+  return (
+    <div style={{ position: "relative" }}>
+      {/* Trigger */}
+      <div
+        title={`${user.name} · ${user.plan || "Free plan"}`}
+        onClick={() => setOpen(o => !o)}
+        style={{
+          cursor: "pointer",
+          display: "flex", alignItems: "center",
+          ...(collapsed ? { marginBottom: "8px" } : { gap: "10px", padding: "8px 10px", borderRadius: "10px", transition: "background 0.15s" }),
+        }}
+        onMouseEnter={e => { if (!collapsed) e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+        onMouseLeave={e => { if (!collapsed) e.currentTarget.style.background = "none"; }}
+      >
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <Avatar user={user} size={34} />
+          <span style={{
+            position: "absolute", bottom: "1px", right: "1px",
+            width: "8px", height: "8px", borderRadius: "50%",
+            background: "#22c55e", border: "1.5px solid #0a0f1a",
+          }} />
+        </div>
+
+        {!collapsed && (
+          <>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: "13px", color: "#cbd5e1", fontFamily: "Georgia, serif",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: "500",
+              }}>{user.name}</div>
+              <div style={{
+                fontSize: "10px", color: "#475569", fontFamily: "monospace",
+                letterSpacing: "0.06em", marginTop: "1px",
+              }}>{(user.plan || "Free plan").toUpperCase()}</div>
+            </div>
+            {/* Chevron */}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2" strokeLinecap="round"
+              style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s", flexShrink: 0 }}>
+              <path d="m18 15-6-6-6 6"/>
+            </svg>
+          </>
+        )}
+      </div>
+
+      {/* Dropdown */}
+      {open && (
+        <>
+          {/* Click-away backdrop */}
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 999 }}
+            onClick={() => setOpen(false)}
+          />
+          <div style={{
+            ...menuStyle,
+            zIndex: 1000,
+            background: "#0d1424",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: "10px",
+            overflow: "hidden",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+            minWidth: "160px",
+            animation: "slideDownSmooth 0.15s ease-out",
+          }}>
+            {/* User info header */}
+            {collapsed && (
+              <div style={{
+                padding: "10px 14px 8px",
+                borderBottom: "1px solid rgba(255,255,255,0.06)",
+              }}>
+                <div style={{ fontSize: "12px", color: "#cbd5e1", fontFamily: "Georgia, serif", fontWeight: "500" }}>
+                  {user.name}
+                </div>
+                <div style={{ fontSize: "10px", color: "#475569", fontFamily: "monospace", letterSpacing: "0.06em", marginTop: "2px" }}>
+                  {(user.plan || "Free plan").toUpperCase()}
+                </div>
+              </div>
+            )}
+
+            {/* Settings */}
+            <Link
+              href="/settings"
+              onClick={() => setOpen(false)}
+              style={{
+                display: "flex", alignItems: "center", gap: "10px",
+                padding: "10px 14px", color: "#94a3b8", fontSize: "13px",
+                fontFamily: "Georgia, serif", textDecoration: "none",
+                transition: "background 0.12s, color 0.12s",
+                borderBottom: "1px solid rgba(255,255,255,0.06)",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "#e2e8f0"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "#94a3b8"; }}
+            >
+              <IconSettings /> Settings
+            </Link>
+
+            {/* Logout */}
+            <button
+              onClick={() => { setOpen(false); onLogout?.(); }}
+              style={{
+                display: "flex", alignItems: "center", gap: "10px",
+                width: "100%", padding: "10px 14px",
+                background: "none", border: "none", cursor: "pointer",
+                color: "#f87171", fontSize: "13px", fontFamily: "Georgia, serif",
+                textAlign: "left", transition: "background 0.12s",
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.08)"}
+              onMouseLeave={e => e.currentTarget.style.background = "none"}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              Log out
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Sidebar ─────────────────────────────────────────────
 /**
  * Props:
@@ -284,7 +421,7 @@ function ChatItem({ item, onSend, onToggleFavorite, onRename, onDelete }) {
  *   user             object    — { name, plan } | null
  *   onLoginClick     fn        — called when login button is clicked
  */
-export default function Sidebar({ open, onOpen, onClose, recents, onToggleFavorite, onSend, onNewChat, user, onRenameChat, onDeleteChat, onLoginClick }) {
+export default function Sidebar({ open, onOpen, onClose, recents, onToggleFavorite, onSend, onNewChat, user, onRenameChat, onDeleteChat, onLoginClick, onLogout }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [favOpen, setFavOpen] = useState(true);
   const [recentsOpen, setRecentsOpen] = useState(true);
@@ -321,31 +458,16 @@ export default function Sidebar({ open, onOpen, onClose, recents, onToggleFavori
 
         <RailBtn icon={<IconHome />}    title="Home"     href="/" />
         <RailBtn icon={<IconNewChat />} title="New chat" onClick={onNewChat} />
-        <RailBtn icon={<IconSearch />}  title="Search"   onClick={onOpen} />
 
         <div style={{ height: "1px", background: "rgba(255,255,255,0.05)", width: "32px", margin: "6px 0" }} />
 
         <RailBtn icon={<IconProject />}  title="Projects"  href="/projects" />
-        <RailBtn icon={<IconDownload />} title="Downloads" href="/" />
         <RailBtn icon={<IconSettings />} title="Settings"  href="/settings" />
 
         {/* Push avatar to bottom */}
         <div style={{ flex: 1 }} />
 
-        {user && (
-          <div
-            title={`${user.name} · ${user.plan || "Free plan"}`}
-            style={{ cursor: "pointer", marginBottom: "8px", position: "relative" }}
-            onClick={onOpen}
-          >
-            <Avatar user={user} size={34} />
-            <span style={{
-              position: "absolute", bottom: "1px", right: "1px",
-              width: "8px", height: "8px", borderRadius: "50%",
-              background: "#22c55e", border: "1.5px solid #0a0f1a",
-            }} />
-          </div>
-        )}
+        {user && <AvatarDropdown user={user} collapsed onLogout={onLogout} />}
 
         <style>{`
           @keyframes slideInLeft { from{opacity:0;transform:translateX(-20px)} to{opacity:1;transform:translateX(0)} }
@@ -545,60 +667,9 @@ export default function Sidebar({ open, onOpen, onClose, recents, onToggleFavori
           borderTop: "1px solid rgba(255,255,255,0.06)",
           padding: "10px 12px",
           flexShrink: 0,
+          position: "relative",
         }}>
-          <div
-            style={{
-              display: "flex", alignItems: "center", gap: "10px",
-              padding: "8px 10px", borderRadius: "10px",
-              cursor: "default", transition: "background 0.15s",
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
-            onMouseLeave={e => e.currentTarget.style.background = "none"}
-          >
-            {/* Avatar + online dot */}
-            <div style={{ position: "relative", flexShrink: 0 }}>
-              <Avatar user={user} size={34} />
-              <span style={{
-                position: "absolute", bottom: "1px", right: "1px",
-                width: "8px", height: "8px", borderRadius: "50%",
-                background: "#22c55e", border: "1.5px solid #0a0f1a",
-              }} />
-            </div>
-
-            {/* Name + plan */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{
-                fontSize: "13px", color: "#cbd5e1", fontFamily: "Georgia, serif",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                fontWeight: "500",
-              }}>
-                {user.name}
-              </div>
-              <div style={{
-                fontSize: "10px", color: "#475569", fontFamily: "monospace",
-                letterSpacing: "0.06em", marginTop: "1px",
-              }}>
-                {(user.plan || "Free plan").toUpperCase()}
-              </div>
-            </div>
-
-            {/* Settings cog */}
-            <Link
-              href="/settings"
-              title="Settings"
-              onClick={e => e.stopPropagation()}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: "#334155", padding: "5px", borderRadius: "6px",
-                textDecoration: "none", transition: "color 0.15s, background 0.15s",
-                flexShrink: 0,
-              }}
-              onMouseEnter={e => { e.currentTarget.style.color = "#94a3b8"; e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "#334155"; e.currentTarget.style.background = "none"; }}
-            >
-              <IconSettings />
-            </Link>
-          </div>
+          <AvatarDropdown user={user} onLogout={onLogout} />
         </div>
       ) : (
         <div style={{
