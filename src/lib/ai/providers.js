@@ -8,7 +8,7 @@ export async function callGemini(messages, systemPrompt = "") {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-2.0-flash",           // ← was: gemini-1.5-flash (deprecated)
     systemInstruction: systemPrompt,
   });
 
@@ -34,7 +34,7 @@ export async function callGroq(messages, systemPrompt = "") {
       Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "llama3-8b-8192",
+      model: "llama-3.1-8b-instant",     // ← was: llama3-8b-8192 (decommissioned)
       messages: [
         ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
         ...messages,
@@ -65,7 +65,7 @@ export async function callOpenRouter(messages, systemPrompt = "") {
       "X-Title": "Nexion Thesis AI",
     },
     body: JSON.stringify({
-      model: "mistralai/mistral-7b-instruct:free",
+      model: "meta-llama/llama-3.1-8b-instruct:free", // ← was: mistralai/mistral-7b-instruct:free (no endpoints)
       messages: [
         ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
         ...messages,
