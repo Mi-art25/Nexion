@@ -3,13 +3,12 @@
 // Gemini (main) → Groq (fast Q&A) → OpenRouter (fallback)
 
 // ─── GEMINI ──────────────────────────────────────────────────────────────────
-// Updated: gemini-1.5-flash is SHUT DOWN → use gemini-2.5-flash
 export async function callGemini(messages, systemPrompt = "") {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",  // ✅ Updated from gemini-1.5-flash (shut down)
+    model: "gemini-1.5-flash",
     systemInstruction: systemPrompt,
   });
 
@@ -27,7 +26,6 @@ export async function callGemini(messages, systemPrompt = "") {
 }
 
 // ─── GROQ ─────────────────────────────────────────────────────────────────────
-// Updated: llama3-8b-8192 is DECOMMISSIONED → use llama-3.3-70b-versatile
 export async function callGroq(messages, systemPrompt = "") {
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -36,7 +34,7 @@ export async function callGroq(messages, systemPrompt = "") {
       Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",  // ✅ Updated from llama3-8b-8192 (decommissioned)
+      model: "llama3-8b-8192",
       messages: [
         ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
         ...messages,
@@ -57,7 +55,6 @@ export async function callGroq(messages, systemPrompt = "") {
 }
 
 // ─── OPENROUTER (FALLBACK) ────────────────────────────────────────────────────
-// Updated: mistral-7b-instruct:free removed → use meta-llama/llama-3.1-8b-instruct:free
 export async function callOpenRouter(messages, systemPrompt = "") {
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -68,7 +65,7 @@ export async function callOpenRouter(messages, systemPrompt = "") {
       "X-Title": "Nexion Thesis AI",
     },
     body: JSON.stringify({
-      model: "meta-llama/llama-3.1-8b-instruct:free",  // ✅ Updated (mistral-7b:free removed)
+      model: "meta-llama/llama-3.1-8b-instruct:free",
       messages: [
         ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
         ...messages,
