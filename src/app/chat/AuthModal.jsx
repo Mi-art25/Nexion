@@ -1,0 +1,494 @@
+"use client";
+
+import { useState } from "react";
+import { supabase } from "@/lib/supabase";
+
+const IconClose = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M18 6 6 18M6 6l12 12"/>
+  </svg>
+);
+
+const IconGoogle = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.1" stroke="currentColor"/>
+    <path d="M10 7h4a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-4a3 3 0 0 1 3-3z"/>
+  </svg>
+);
+
+export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
+  const [isSignup, setIsSignup] = useState(true);
+  const [step, setStep] = useState("form"); // "form" or "verify"
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+
+  const getPasswordStrength = (pwd) => {
+    if (!pwd) return { strength: 0, label: "None", color: "#475569" };
+    let strength = 0;
+    if (pwd.length >= 8) strength++;
+    if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) strength++;
+    if (/[0-9]/.test(pwd)) strength++;
+    if (/[^a-zA-Z0-9]/.test(pwd)) strength++;
+    
+    if (strength <= 1) return { strength: 1, label: "Weak", color: "#ef4444" };
+    if (strength <= 2) return { strength: 2, label: "Medium", color: "#f59e0b" };
+    return { strength: 3, label: "Strong", color: "#22c55e" };
+  };
+
+  const pwdStrength = getPasswordStrength(password);
+
+  if (!isOpen) return null;
+
+  if (step === "verify") {
+    return (
+      <div style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 10000, backdropFilter: "blur(4px)",
+      }}>
+        <div style={{
+          background: "#0a0f1a", border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: "16px", padding: "2.5rem", maxWidth: "400px", width: "90%",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
+          position: "relative",
+          animation: "slideUpSmooth 0.3s ease-out",
+        }}>
+          <div style={{ marginBottom: "2rem", textAlign: "center" }}>
+            <h2 style={{
+              fontSize: "24px", fontWeight: "600", color: "#e2e8f0",
+              marginBottom: "0.5rem", fontFamily: "Georgia, serif",
+            }}>
+              Verify Email
+            </h2>
+            <p style={{ fontSize: "13px", color: "#475569", fontFamily: "Georgia, serif" }}>
+              We sent a verification code to {email}
+            </p>
+          </div>
+
+          <form onSubmit={(e) => { e.preventDefault(); handleVerify(); }} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {error && (
+              <div style={{
+                background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
+                borderRadius: "8px", padding: "12px", fontSize: "13px", color: "#fca5a5",
+                fontFamily: "Georgia, serif",
+              }}>
+                {error}
+              </div>
+            )}
+
+            <input
+              type="text"
+              placeholder="Verification code"
+              value={verificationCode}
+              onChange={e => setVerificationCode(e.target.value)}
+              style={{
+                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "8px", padding: "12px", color: "#e2e8f0",
+                fontSize: "14px", fontFamily: "Georgia, serif", outline: "none",
+                transition: "border-color 0.15s",
+              }}
+              onFocus={e => e.target.style.borderColor = "rgba(59,130,246,0.5)"}
+              onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
+            />
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                background: "#1d4ed8", color: "#fff", border: "none",
+                borderRadius: "8px", padding: "12px", fontSize: "14px",
+                fontFamily: "Georgia, serif", cursor: loading ? "not-allowed" : "pointer",
+                transition: "background 0.15s", opacity: loading ? 0.7 : 1,
+                fontWeight: "500",
+              }}
+              onMouseEnter={e => { if (!loading) e.currentTarget.style.background = "#1e40af"; }}
+              onMouseLeave={e => { if (!loading) e.currentTarget.style.background = "#1d4ed8"; }}
+            >
+              {loading ? "Verifying…" : "Verify"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setStep("form"); setError(""); }}
+              style={{
+                background: "transparent", color: "#60a5fa", border: "none",
+                cursor: "pointer", fontSize: "13px", fontFamily: "Georgia, serif",
+                transition: "color 0.15s",
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = "#93c5fd"}
+              onMouseLeave={e => e.currentTarget.style.color = "#60a5fa"}
+            >
+              Back to form
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      if (isSignup) {
+        if (!firstName || !lastName || !email || !password || !confirmPassword) {
+          setError("All fields are required");
+          setLoading(false);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setError("Passwords do not match");
+          setLoading(false);
+          return;
+        }
+        if (password.length < 8) {
+          setError("Password must be at least 8 characters");
+          setLoading(false);
+          return;
+        }
+        // Mock signup
+        console.log("Signing up:", { firstName, lastName, email, password });
+        // Move to verification step
+        setStep("verify");
+      } else {
+        if (!email || !password) {
+          setError("Email and password are required");
+          setLoading(false);
+          return;
+        }
+        // Mock login
+        console.log("Logging in:", { email, password });
+        onAuthSuccess({ name: "User", plan: "Free plan" });
+        onClose();
+      }
+    } catch {
+      setError("Authentication failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleVerify() {
+    if (!verificationCode) {
+      setError("Verification code is required");
+      return;
+    }
+    setLoading(true);
+    try {
+      // Mock verification
+      console.log("Verifying with code:", verificationCode);
+      onAuthSuccess({ name: `${firstName} ${lastName}`, plan: "Free plan" });
+      onClose();
+      setStep("form");
+    } catch {
+      setError("Verification failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleGoogleAuth() {
+    setError("");
+    setLoading(true);
+    try {
+      const redirectTo = `${window.location.origin}/auth/callback?next=/chat`;
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
+        },
+      });
+
+      if (oauthError) throw oauthError;
+    } catch (err) {
+      setError(err?.message || "Google authentication failed");
+      setLoading(false);
+    } finally {
+      // A successful OAuth request redirects away from this page.
+    }
+  }
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 10000, backdropFilter: "blur(4px)",
+    }}>
+      <div style={{
+        background: "#0a0f1a", border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: "16px", padding: "2.5rem", maxWidth: "400px", width: "90%",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
+        position: "relative",
+      }}>
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          style={{
+            position: "absolute", top: "1rem", right: "1rem",
+            background: "none", border: "none", cursor: "pointer",
+            color: "#475569", display: "flex", alignItems: "center",
+            transition: "color 0.15s",
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = "#94a3b8"}
+          onMouseLeave={e => e.currentTarget.style.color = "#475569"}
+        >
+          <IconClose />
+        </button>
+
+        {/* Header */}
+        <div style={{ marginBottom: "2rem", textAlign: "center" }}>
+          <h2 style={{
+            fontSize: "24px", fontWeight: "600", color: "#e2e8f0",
+            marginBottom: "0.5rem", fontFamily: "Georgia, serif",
+          }}>
+            {isSignup ? "Create Account" : "Welcome Back"}
+          </h2>
+          <p style={{ fontSize: "13px", color: "#475569", fontFamily: "Georgia, serif" }}>
+            {isSignup ? "Start researching with Nexion today" : "Sign in to your account"}
+          </p>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {error && (
+            <div style={{
+              background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: "8px", padding: "12px", fontSize: "13px", color: "#fca5a5",
+              fontFamily: "Georgia, serif",
+            }}>
+              {error}
+            </div>
+          )}
+
+          {isSignup && (
+            <>
+              <input
+                type="text"
+                placeholder="First Name"
+                value={firstName}
+                onChange={e => setFirstName(e.target.value)}
+                style={{
+                  background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "8px", padding: "12px", color: "#e2e8f0",
+                  fontSize: "14px", fontFamily: "Georgia, serif", outline: "none",
+                  transition: "border-color 0.15s",
+                }}
+                onFocus={e => e.target.style.borderColor = "rgba(59,130,246,0.5)"}
+                onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
+              />
+              <input
+                type="text"
+                placeholder="Last Name"
+                value={lastName}
+                onChange={e => setLastName(e.target.value)}
+                style={{
+                  background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "8px", padding: "12px", color: "#e2e8f0",
+                  fontSize: "14px", fontFamily: "Georgia, serif", outline: "none",
+                  transition: "border-color 0.15s",
+                }}
+                onFocus={e => e.target.style.borderColor = "rgba(59,130,246,0.5)"}
+                onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
+              />
+            </>
+          )}
+
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            style={{
+              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: "8px", padding: "12px", color: "#e2e8f0",
+              fontSize: "14px", fontFamily: "Georgia, serif", outline: "none",
+              transition: "border-color 0.15s",
+            }}
+            onFocus={e => e.target.style.borderColor = "rgba(59,130,246,0.5)"}
+            onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
+          />
+
+          {/* Password field with show/hide toggle */}
+          <div style={{ position: "relative" }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="Password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              style={{
+                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "8px", padding: "12px", paddingRight: "40px", color: "#e2e8f0",
+                fontSize: "14px", fontFamily: "Georgia, serif", outline: "none",
+                transition: "border-color 0.15s", width: "100%", boxSizing: "border-box",
+              }}
+              onFocus={e => e.target.style.borderColor = "rgba(59,130,246,0.5)"}
+              onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)",
+                background: "none", border: "none", color: "#94a3b8", cursor: "pointer",
+                fontSize: "16px", padding: "0", display: "flex", alignItems: "center",
+                transition: "color 0.15s",
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = "#cbd5e1"}
+              onMouseLeave={e => e.currentTarget.style.color = "#94a3b8"}
+            >
+              {showPassword ? "👁" : "👁‍🗨"}
+            </button>
+          </div>
+
+          {/* Password strength indicator (only on signup) */}
+          {isSignup && password && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px", fontSize: "12px",
+              fontFamily: "Georgia, serif",
+            }}>
+              <div style={{
+                flex: 1, display: "flex", gap: "3px", height: "4px",
+              }}>
+                {[1, 2, 3].map(i => (
+                  <div
+                    key={i}
+                    style={{
+                      flex: 1, borderRadius: "2px",
+                      background: i <= pwdStrength.strength 
+                        ? pwdStrength.color 
+                        : "rgba(255,255,255,0.1)",
+                      transition: "background 0.15s",
+                    }}
+                  />
+                ))}
+              </div>
+              <span style={{
+                color: pwdStrength.color,
+                minWidth: "50px",
+                transition: "color 0.15s",
+              }}>
+                {pwdStrength.label}
+              </span>
+            </div>
+          )}
+
+          {/* Confirm password field (only on signup) */}
+          {isSignup && (
+            <div style={{ position: "relative" }}>
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                placeholder="Confirm password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                style={{
+                  background: "rgba(255,255,255,0.04)", border: password && confirmPassword && password !== confirmPassword 
+                    ? "1px solid rgba(239,68,68,0.5)"
+                    : "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "8px", padding: "12px", paddingRight: "40px", color: "#e2e8f0",
+                  fontSize: "14px", fontFamily: "Georgia, serif", outline: "none",
+                  transition: "border-color 0.15s", width: "100%", boxSizing: "border-box",
+                }}
+                onFocus={e => e.target.style.borderColor = password && confirmPassword && password !== confirmPassword ? "rgba(239,68,68,0.5)" : "rgba(59,130,246,0.5)"}
+                onBlur={e => e.target.style.borderColor = password && confirmPassword && password !== confirmPassword ? "rgba(239,68,68,0.5)" : "rgba(255,255,255,0.1)"}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={{
+                  position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)",
+                  background: "none", border: "none", color: "#94a3b8", cursor: "pointer",
+                  fontSize: "16px", padding: "0", display: "flex", alignItems: "center",
+                  transition: "color 0.15s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = "#cbd5e1"}
+                onMouseLeave={e => e.currentTarget.style.color = "#94a3b8"}
+              >
+                {showConfirmPassword ? "👁" : "👁‍🗨"}
+              </button>
+            </div>
+          )}
+
+          {/* Password mismatch warning */}
+          {isSignup && password && confirmPassword && password !== confirmPassword && (
+            <div style={{
+              fontSize: "12px", color: "#fca5a5", fontFamily: "Georgia, serif",
+            }}>
+              Passwords do not match
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              background: "#1d4ed8", color: "#fff", border: "none",
+              borderRadius: "8px", padding: "12px", fontSize: "14px",
+              fontFamily: "Georgia, serif", cursor: loading ? "not-allowed" : "pointer",
+              transition: "background 0.15s", opacity: loading ? 0.7 : 1,
+              fontWeight: "500",
+            }}
+            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = "#1e40af"; }}
+            onMouseLeave={e => { if (!loading) e.currentTarget.style.background = "#1d4ed8"; }}
+          >
+            {loading ? "Please wait…" : (isSignup ? "Continue to Verify" : "Sign In")}
+          </button>
+        </form>
+
+        {/* Divider */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "1.5rem 0", opacity: 0.5 }}>
+          <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.1)" }} />
+          <span style={{ fontSize: "12px", color: "#475569", fontFamily: "monospace" }}>OR</span>
+          <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.1)" }} />
+        </div>
+
+        {/* Google Button */}
+        <button
+          onClick={handleGoogleAuth}
+          disabled={loading}
+          style={{
+            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: "8px", padding: "12px", fontSize: "14px",
+            fontFamily: "Georgia, serif", color: "#e2e8f0", cursor: loading ? "not-allowed" : "pointer",
+            transition: "all 0.15s", display: "flex", alignItems: "center",
+            justifyContent: "center", gap: "8px", opacity: loading ? 0.7 : 1,
+          }}
+          onMouseEnter={e => { if (!loading) { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)"; }}}
+          onMouseLeave={e => { if (!loading) { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; }}}
+        >
+          <IconGoogle /> Continue with Google
+        </button>
+
+        {/* Toggle link */}
+        <div style={{ textAlign: "center", marginTop: "1.5rem", fontSize: "13px", color: "#475569", fontFamily: "Georgia, serif" }}>
+          {isSignup ? "Already have an account?" : "Don't have an account?"}{" "}
+          <button
+            onClick={() => setIsSignup(!isSignup)}
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              color: "#60a5fa", fontFamily: "Georgia, serif", fontSize: "13px",
+              transition: "color 0.15s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = "#93c5fd"}
+            onMouseLeave={e => e.currentTarget.style.color = "#60a5fa"}
+          >
+            {isSignup ? "Sign In" : "Sign Up"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
