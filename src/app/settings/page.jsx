@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createBrowserClient } from "@supabase/ssr";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const RESEARCHER_TYPES = [
@@ -49,7 +49,7 @@ const fmt = (iso) =>
 
 // ── Component ────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   const fileRef  = useRef(null);
 
   // ── UI state ─────────────────────────────────────────────────────────────
