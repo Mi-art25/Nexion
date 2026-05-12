@@ -208,7 +208,7 @@ export default function AuthModal({ isOpen, onClose }) {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=/chat`,
+          redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: { access_type: "offline", prompt: "consent" },
         },
       });

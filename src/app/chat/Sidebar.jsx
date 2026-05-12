@@ -233,7 +233,7 @@ function ChatItem({ item, onSend, onToggleFavorite, onRename, onDelete }) {
       )}
 
       <button
-        onClick={() => onSend(item.label)}
+        onClick={() => onSend(item.id)}
         style={{
           flex: 1, background: "none", border: "none", cursor: "pointer",
           color: "#64748b", fontSize: "12px", fontFamily: "Georgia, serif",

@@ -85,6 +85,12 @@ export default function ChatPage() {
     };
   }
 
+  function createChatLabel(requestText) {
+    const normalized = requestText.replace(/\s+/g, " ").trim();
+    if (!normalized) return "New Chat";
+    return normalized.slice(0, 60) + (normalized.length > 60 ? "…" : "");
+  }
+
   // ── Supabase auth listener ─────────────────────────────────
   useEffect(() => {
     let mounted = true;
@@ -175,6 +181,10 @@ export default function ChatPage() {
   async function handleSend() {
     const trimmed = input.trim();
     if ((!trimmed && attachments.length === 0) || isLoading) return;
+    if (!user) {
+      setAuthModalOpen(true);
+      return;
+    }
     setInput("");
 
     const pdfAttachment = attachments.find(a => a.type === "application/pdf");
@@ -182,7 +192,7 @@ export default function ChatPage() {
 
     // Derive chat label from first user message (truncated)
     const isFirstMessage = messages.length === 0;
-    const chatLabel = userContent.slice(0, 60) + (userContent.length > 60 ? "…" : "");
+    const chatLabel = createChatLabel(userContent);
 
     // Save user message first
     if (isFirstMessage) {
@@ -287,11 +297,7 @@ export default function ChatPage() {
         onClose={() => setSidebarOpen(false)}
         recents={recents}
         onToggleFavorite={toggleFavorite}
-        onSend={(label) => {
-          // Find chat by label and load it
-          const chat = recents.find(r => r.label === label);
-          if (chat) handleLoadChat(chat.id);
-        }}
+        onSend={handleLoadChat}
         onNewChat={handleNewChat}
         onRenameChat={renameChat}
         onDeleteChat={deleteChat}
@@ -311,17 +317,8 @@ export default function ChatPage() {
                 What are you <span style={{ fontStyle: "italic", color: "#60a5fa" }}>researching?</span>
               </h1>
               <p style={{ fontSize: "14px", color: "#334155", maxWidth: "400px", lineHeight: "1.8", marginBottom: "2.5rem" }}>
-                Ask anything about your thesis — methodology, literature, citations, or structure.
+                Send your first thesis question to start a saved chat session.
               </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "center", maxWidth: "560px" }}>
-                {["Help me write a literature review", "Explain research methodology types", "How do I structure a thesis introduction?", "Format a citation in APA 7th edition"].map((s) => (
-                  <button key={s} onClick={() => sendMessage(s)} style={{
-                    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
-                    color: "#64748b", fontSize: "13px", padding: "8px 16px",
-                    borderRadius: "8px", cursor: "pointer", fontFamily: "Georgia, serif",
-                  }}>{s}</button>
-                ))}
-              </div>
             </div>
           )}
 
@@ -477,13 +474,13 @@ export default function ChatPage() {
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   onPaste={handlePaste}
-                  placeholder={attachments.length > 0 ? "Add a message or just send…" : "Ask about your thesis…"}
+                  placeholder={!user ? "Log in to save chats and continue" : attachments.length > 0 ? "Add a message or just send…" : "Ask about your thesis…"}
                   rows={1}
                   style={{ flex: 1, background: "none", border: "none", outline: "none", color: "#e2e8f0", fontSize: "14px", fontFamily: "Georgia, serif", lineHeight: "1.6", resize: "none", maxHeight: "140px", overflowY: "auto" }}
                   onInput={e => { e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px"; }}
                 />
-                <button onClick={handleSend} disabled={isLoading || (!input.trim() && attachments.length === 0)}
-                  style={{ width: "34px", height: "34px", borderRadius: "8px", background: (input.trim() || attachments.length > 0) && !isLoading ? "#1d4ed8" : "rgba(255,255,255,0.05)", border: "none", cursor: (input.trim() || attachments.length > 0) && !isLoading ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.15s", fontSize: "16px", color: (input.trim() || attachments.length > 0) && !isLoading ? "#fff" : "#334155" }}
+                <button onClick={handleSend} disabled={isLoading || (!input.trim() && attachments.length === 0) || !user}
+                  style={{ width: "34px", height: "34px", borderRadius: "8px", background: (input.trim() || attachments.length > 0) && !isLoading && user ? "#1d4ed8" : "rgba(255,255,255,0.05)", border: "none", cursor: (input.trim() || attachments.length > 0) && !isLoading && user ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.15s", fontSize: "16px", color: (input.trim() || attachments.length > 0) && !isLoading && user ? "#fff" : "#334155" }}
                 >↑</button>
               </div>
             </div>

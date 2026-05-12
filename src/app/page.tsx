@@ -1,6 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 // ─── Loader Component ────────────────────────────────────────────────────────
 
@@ -626,6 +628,21 @@ export default function Home() {
   const mouseRef = useRef({ x: -999, y: -999 });
   const [loaderDone, setLoaderDone] = useState(false);
   const [heroVisible, setHeroVisible] = useState(false);
+  const router = useRouter();
+
+  // ── Redirect logged-in users straight to /chat ──────────────
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) router.replace("/chat");
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) router.replace("/chat");
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router]);
+  // ────────────────────────────────────────────────────────────
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -780,6 +797,7 @@ export default function Home() {
         .nexion-btn-primary:hover .nexion-btn-arrow { transform: translateX(5px); }
         .nexion-btn-icon { display: inline-block; transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s ease; opacity: 0.65; }
         .nexion-btn-secondary:hover .nexion-btn-icon { transform: translateY(-3px); opacity: 1; }
+        @keyframes nexionSpin { to{transform:rotate(360deg)} }
       ` }} />
 
       {!loaderDone && (
@@ -812,8 +830,6 @@ export default function Home() {
           pointerEvents: "none", zIndex: 0,
           animation: "heroBgPulse 6s ease-in-out infinite",
         }} />
-
-
 
         {/* Hero */}
         <section style={{

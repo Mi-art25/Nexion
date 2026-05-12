@@ -6,7 +6,7 @@ export const supabase = createClient(
   {
     auth: {
       autoRefreshToken: true,
-      detectSessionInUrl: true,
+      detectSessionInUrl: false, // ← route handler does this, not the browser
       flowType: 'pkce',
       persistSession: true,
     },
