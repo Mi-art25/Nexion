@@ -1,4 +1,4 @@
-// src/hooks/useChats.js
+// src/hooks/useChats.ts
 // Supabase persistence for chat sessions and messages.
 // Replaces the React-state-only recents array in chat/page.jsx.
 //

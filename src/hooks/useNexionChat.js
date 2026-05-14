@@ -1,4 +1,4 @@
-// src/hooks/useNexionChat.js
+// src/hooks/useNexionChat.ts
 import { useState } from "react";
 
 type Message = {
