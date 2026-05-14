@@ -920,7 +920,7 @@ export default function Home() {
             POWERED BY
           </p>
           <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-            {["Gemini 1.5 Flash", "Groq LLaMA 3", "OpenRouter", "Next.js 14", "Supabase"].map((t) => (
+            {["Gemini 2.0 Flash", "Groq LLaMA 3", "OpenRouter", "Next.js 14", "Supabase"].map((t) => (
               <TechPill key={t} label={t} />
             ))}
           </div>

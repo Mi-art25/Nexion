@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { useNexionChat } from "@/hooks/useNexionChat";
+import AnalyzeComponent from '../../components/AnalyzeComponent';
 
 const ANALYSIS_PROMPTS = [
   { label: "Research Gaps", prompt: "What are the research gaps or limitations identified in this document?" },

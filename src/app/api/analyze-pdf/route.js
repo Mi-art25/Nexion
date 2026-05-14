@@ -2,9 +2,23 @@
 // PDF Analysis endpoint — always uses Gemini for its 1M token context window
 
 import { routeAI } from "@/lib/ai/router";
+import { getSession } from "../../../lib/supabase";
+import rateLimit from 'express-rate-limit';
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+});
 
 export async function POST(req) {
+  await limiter(req, res, () => {});
+
   try {
+    const session = await getSession(req);
+    if (!session) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { pdfText, question } = await req.json();
 
     if (!pdfText) {

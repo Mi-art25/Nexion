@@ -338,6 +338,21 @@ export default function AuthModal({ isOpen, onClose }) {
             </>
           )}
 
+          {/* Forgot password — sign-in only */}
+          {!isSignup && (
+            <div style={{ textAlign: "right", marginTop: "-4px" }}>
+              <a
+                href="/forgot-password"
+                onClick={handleClose}
+                style={{ fontSize: "12px", color: "#475569", fontFamily: "Georgia, serif", textDecoration: "none" }}
+                onMouseEnter={e => e.currentTarget.style.color = "#60a5fa"}
+                onMouseLeave={e => e.currentTarget.style.color = "#475569"}
+              >
+                Forgot password?
+              </a>
+            </div>
+          )}
+
           <button type="submit" disabled={loading}
             style={{ background: "#1d4ed8", color: "#fff", border: "none", borderRadius: "8px", padding: "12px", fontSize: "14px", fontFamily: "Georgia, serif", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, fontWeight: "500" }}
             onMouseEnter={e => { if (!loading) e.currentTarget.style.background = "#1e40af"; }}

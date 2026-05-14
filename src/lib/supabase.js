@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-export const supabase = createClient(
+const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   {
@@ -12,3 +12,10 @@ export const supabase = createClient(
     },
   }
 )
+
+export const getSession = async (req) => {
+  const { user } = await supabase.auth.api.getUserByCookie(req)
+  return user
+}
+
+export { supabase } // Export existing supabase client

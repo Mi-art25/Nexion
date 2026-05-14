@@ -2,6 +2,9 @@
 // Main chat endpoint for Nexion — uses smart AI router + Semantic Scholar
 
 import { routeAI } from "@/lib/ai/router";
+import { getSession } from '../../../lib/supabase';
+import { OpenAI } from 'openai';
+import rateLimit from 'express-rate-limit';
 
 const THESIS_SYSTEM_PROMPT = `You are Nexion, an intelligent academic AI assistant specialized in helping students with their thesis research.
 
@@ -131,4 +134,50 @@ export async function POST(req) {
       { status: 503 }
     );
   }
+}
+
+// ─── Auth Middleware ───────────────────────────────────────────
+export async function handler(req, res) {
+  const session = await getSession(req);
+  if (!session) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // ...existing code...
+}
+
+// ─── Rate Limiting ────────────────────────────────────────────
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+});
+
+export default async function handler(req, res) {
+  await limiter(req, res, () => {});
+
+  const session = await getSession(req);
+  if (!session) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const openai = new OpenAI(process.env.OPENAI_API_KEY);
+  const stream = new ReadableStream({
+    async start(controller) {
+      const response = await openai.createChatCompletion({
+        model: 'gpt-4',
+        messages: req.body.messages,
+        stream: true,
+      });
+
+      for await (const chunk of response) {
+        controller.enqueue(new TextEncoder().encode(chunk));
+      }
+
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/event-stream' },
+  });
 }

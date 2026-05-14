@@ -1,723 +1,454 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
-// ── Constants ────────────────────────────────────────────────────────────────
-const RESEARCHER_TYPES = [
-  "Undergraduate Student",
-  "Graduate Student (Master's)",
-  "PhD Candidate",
-  "Postdoctoral Researcher",
-  "Academic Faculty",
-  "Independent Researcher",
-  "Industry Researcher",
-  "Data Scientist",
-  "Journalist / Investigative Writer",
-  "Policy Analyst",
-  "Other",
-];
+// ─── Icons ────────────────────────────────────────────────────
+const IconUser = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+  </svg>
+);
+const IconLock = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+);
+const IconTrash = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+  </svg>
+);
+const IconLogout = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+    <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+  </svg>
+);
+const IconCheck = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+);
 
-const FONT_OPTIONS = [
-  { label: "System Default",  value: "system-ui, sans-serif" },
-  { label: "Times New Roman", value: "'Times New Roman', Times, serif" },
-  { label: "Arial",           value: "Arial, Helvetica, sans-serif" },
-];
-
-const APPEARANCE_OPTIONS = [
-  { value: "dynamic", label: "Dynamic", icon: "✦" },
-  { value: "dark",    label: "Night",   icon: "◐" },
-  { value: "light",   label: "Light",   icon: "○" },
-];
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-const parseDevice = (ua = "") => {
-  if (ua.includes("iPhone"))  return "Safari · iPhone";
-  if (ua.includes("Android")) return "Chrome · Android";
-  if (ua.includes("Mac"))     return "Safari · macOS";
-  if (ua.includes("Windows")) return "Chrome · Windows";
-  if (ua.includes("Linux"))   return "Firefox · Linux";
-  return "Unknown browser";
-};
-
-const fmt = (iso) =>
-  iso
-    ? new Date(iso).toLocaleDateString("en-US", {
-        month: "short", day: "numeric", year: "numeric",
-      })
-    : "—";
-
-// ── Component ────────────────────────────────────────────────────────────────
-export default function SettingsPage() {
-  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-  const fileRef  = useRef(null);
-
-  // ── UI state ─────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState("general");
-  const [loading,   setLoading]   = useState(true);
-  const [saving,    setSaving]    = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [deleting,  setDeleting]  = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [toast, setToast] = useState(null); // { type: "success"|"error", text: string }
-
-  // ── Data state ───────────────────────────────────────────────────────────
-  const [user,     setUser]     = useState(null);
-  const [sessions, setSessions] = useState([]);
-
-  // ── Profile fields ───────────────────────────────────────────────────────
-  const [avatar,         setAvatar]         = useState(null);   // preview URL
-  const [avatarFile,     setAvatarFile]     = useState(null);   // pending File
-  const [avatarRemoved,  setAvatarRemoved]  = useState(false);  // flag: user hit "Remove"
-  const [fullName,       setFullName]       = useState("");
-  const [nickname,       setNickname]       = useState("");
-  const [researcherType, setResearcherType] = useState("");
-  const [appearance,     setAppearance]     = useState("dynamic");
-  const [chatFont,       setChatFont]       = useState("system-ui, sans-serif");
-
-  // ── Toast helper ─────────────────────────────────────────────────────────
-  const showToast = useCallback((type, text) => {
-    setToast({ type, text });
-    setTimeout(() => setToast(null), 3500);
-  }, []);
-
-  // ── Load user + profile ──────────────────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      // 1. Get authenticated user
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        window.location.href = "/login";
-        return;
-      }
-      setUser(user);
-
-      // 2. Load profile row (created automatically on signup via DB trigger)
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError && profileError.code !== "PGRST116") {
-        // PGRST116 = row not found; anything else is a real error
-        showToast("error", "Failed to load profile.");
-      }
-
-      if (profile) {
-        setFullName(profile.full_name       || "");
-        setNickname(profile.nickname        || "");
-        setResearcherType(profile.researcher_type || "");
-        setAppearance(profile.appearance    || "dynamic");
-        setChatFont(profile.chat_font       || "system-ui, sans-serif");
-        if (profile.avatar_url) setAvatar(profile.avatar_url);
-      }
-
-      // 3. Build current-session info from live session
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setSessions([{
-          id:         "current",
-          user_agent: navigator.userAgent,
-          created_at: new Date((session.expires_at - 3600) * 1000).toISOString(),
-          updated_at: new Date().toISOString(),
-          current:    true,
-        }]);
-      }
-
-      setLoading(false);
-    })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Avatar: pick file ────────────────────────────────────────────────────
-  const handleAvatarChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      showToast("error", "Image must be under 2 MB.");
-      return;
-    }
-    setAvatarFile(file);
-    setAvatarRemoved(false);
-    setAvatar(URL.createObjectURL(file));
-    // Reset input so the same file can be re-selected after removal
-    e.target.value = "";
-  };
-
-  // ── Avatar: remove ───────────────────────────────────────────────────────
-  const handleRemoveAvatar = () => {
-    setAvatar(null);
-    setAvatarFile(null);
-    setAvatarRemoved(true);
-  };
-
-  // ── Save profile ─────────────────────────────────────────────────────────
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      let avatar_url = avatar && !avatarFile && !avatarRemoved ? avatar : null;
-
-      // Upload new avatar if one was selected
-      if (avatarFile) {
-        const ext  = avatarFile.name.split(".").pop().toLowerCase();
-        const path = `${user.id}/avatar.${ext}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("avatars")
-          .upload(path, avatarFile, { upsert: true, contentType: avatarFile.type });
-
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from("avatars")
-          .getPublicUrl(path);
-
-        // Cache-bust so the browser shows the new image immediately
-        avatar_url = `${urlData.publicUrl}?t=${Date.now()}`;
-        setAvatar(avatar_url);
-        setAvatarFile(null);
-      }
-
-      // If the user removed their avatar, clean up storage (best-effort)
-      if (avatarRemoved) {
-        const exts = ["jpg", "jpeg", "png", "webp", "gif"];
-        await supabase.storage
-          .from("avatars")
-          .remove(exts.map((e) => `${user.id}/avatar.${e}`));
-        setAvatarRemoved(false);
-      }
-
-      // Upsert the profile row
-      const { error: upsertError } = await supabase
-        .from("profiles")
-        .upsert(
-          {
-            id:              user.id,
-            full_name:       fullName.trim(),
-            nickname:        nickname.trim(),
-            researcher_type: researcherType,
-            appearance,
-            chat_font:       chatFont,
-            avatar_url,      // null clears it; a URL sets it
-            updated_at:      new Date().toISOString(),
-          },
-          { onConflict: "id" }
-        );
-
-      if (upsertError) throw upsertError;
-
-      showToast("success", "Changes saved successfully.");
-    } catch (err) {
-      showToast("error", err.message || "Failed to save changes.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // ── Logout ───────────────────────────────────────────────────────────────
-  const handleLogout = async () => {
-    setLoggingOut(true);
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      showToast("error", "Logout failed. Please try again.");
-      setLoggingOut(false);
-      return;
-    }
-    window.location.href = "/";
-  };
-
-  // ── Delete account ───────────────────────────────────────────────────────
-  // Requires src/app/api/account/delete/route.js (service-role key, server-side only)
-  const handleDeleteAccount = async () => {
-    setDeleting(true);
-    try {
-      const res = await fetch("/api/account/delete", { method: "DELETE" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Server error.");
-      }
-      await supabase.auth.signOut();
-      window.location.href = "/";
-    } catch (err) {
-      showToast("error", err.message);
-      setDeleting(false);
-      setShowDeleteConfirm(false);
-    }
-  };
-
-  // ── Revoke session ───────────────────────────────────────────────────────
-  const handleRevokeSession = async (id) => {
-    const res = await fetch(`/api/account/sessions/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      setSessions((prev) => prev.filter((s) => s.id !== id));
-    } else {
-      showToast("error", "Failed to revoke session.");
-    }
-  };
-
-  // ── Loading screen ───────────────────────────────────────────────────────
-  if (loading) return (
-    <div style={{
-      display: "flex", minHeight: "100vh",
-      background: "#0d0e11", alignItems: "center", justifyContent: "center",
-    }}>
+// ─── Section wrapper ──────────────────────────────────────────
+function Section({ title, children }) {
+  return (
+    <div style={{ marginBottom: "2.5rem" }}>
+      <p style={{ fontSize: "11px", letterSpacing: "0.1em", color: "#334155", marginBottom: "1rem", fontFamily: "monospace" }}>
+        {title}
+      </p>
       <div style={{
-        width: 32, height: 32,
-        border: "2px solid #1e2029", borderTopColor: "#c9a96e",
-        borderRadius: "50%", animation: "spin 0.8s linear infinite",
-      }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid rgba(255,255,255,0.07)",
+        borderRadius: "12px",
+        overflow: "hidden",
+      }}>
+        {children}
+      </div>
     </div>
   );
+}
 
-  // ── Render ───────────────────────────────────────────────────────────────
+// ─── Row inside a section ─────────────────────────────────────
+function Row({ icon, label, description, children, last = false }) {
   return (
-    <div className="sr">
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "1rem 1.25rem", gap: "1rem",
+      borderBottom: last ? "none" : "1px solid rgba(255,255,255,0.04)",
+    }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flex: 1, minWidth: 0 }}>
+        <div style={{ color: "#475569", paddingTop: "1px", flexShrink: 0 }}>{icon}</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: "13px", color: "#cbd5e1", fontFamily: "Georgia, serif" }}>{label}</div>
+          {description && (
+            <div style={{ fontSize: "12px", color: "#334155", fontFamily: "Georgia, serif", marginTop: "2px", lineHeight: "1.5" }}>
+              {description}
+            </div>
+          )}
+        </div>
+      </div>
+      {children && <div style={{ flexShrink: 0 }}>{children}</div>}
+    </div>
+  );
+}
 
-      {/* ── Sidebar ────────────────────────────────────────────────────── */}
-      <aside className="sb">
-        <div className="sb-logo">
-          <span className="lm">N</span>
-          <span className="lt">Nexion</span>
+// ─── Inline editable field ────────────────────────────────────
+function EditableField({ value, onSave, placeholder = "" }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function handleSave() {
+    if (!draft.trim() || draft === value) { setEditing(false); setDraft(value); return; }
+    setSaving(true);
+    await onSave(draft.trim());
+    setSaving(false);
+    setEditing(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  if (editing) {
+    return (
+      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+        <input
+          autoFocus
+          type="text"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") { setEditing(false); setDraft(value); } }}
+          style={{
+            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(59,130,246,0.4)",
+            borderRadius: "6px", padding: "5px 10px", color: "#e2e8f0",
+            fontSize: "13px", fontFamily: "Georgia, serif", outline: "none",
+          }}
+        />
+        <button onClick={handleSave} disabled={saving} style={{
+          background: "#1d4ed8", border: "none", borderRadius: "6px",
+          padding: "5px 10px", color: "#fff", fontSize: "12px",
+          fontFamily: "Georgia, serif", cursor: "pointer",
+        }}>
+          {saving ? "…" : "Save"}
+        </button>
+        <button onClick={() => { setEditing(false); setDraft(value); }} style={{
+          background: "none", border: "none", cursor: "pointer",
+          color: "#475569", fontSize: "12px", fontFamily: "Georgia, serif",
+        }}>Cancel</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+      <span style={{ fontSize: "13px", color: saved ? "#22c55e" : "#64748b", fontFamily: "Georgia, serif", transition: "color 0.3s" }}>
+        {saved ? <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><IconCheck /> Saved</span> : (value || placeholder)}
+      </span>
+      {!saved && (
+        <button onClick={() => setEditing(true)} style={{
+          background: "none", border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: "5px", padding: "3px 8px", cursor: "pointer",
+          color: "#475569", fontSize: "11px", fontFamily: "monospace",
+          letterSpacing: "0.04em", transition: "all 0.15s",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.color = "#94a3b8"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.16)"; }}
+          onMouseLeave={e => { e.currentTarget.style.color = "#475569"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
+        >EDIT</button>
+      )}
+    </div>
+  );
+}
+
+// ─── Delete account confirm modal ─────────────────────────────
+function DeleteModal({ open, onClose, onConfirm }) {
+  const [input, setInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => { if (open) { setInput(""); setError(""); } }, [open]);
+
+  async function handleDelete() {
+    if (input !== "delete my account") { setError('Type "delete my account" exactly.'); return; }
+    setDeleting(true);
+    setError("");
+    await onConfirm();
+    setDeleting(false);
+  }
+
+  if (!open) return null;
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 10000, backdropFilter: "blur(4px)",
+    }}>
+      <div style={{
+        background: "#0a0f1a", border: "1px solid rgba(239,68,68,0.2)",
+        borderRadius: "16px", padding: "2rem", maxWidth: "400px", width: "90%",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
+      }}>
+        <h2 style={{ fontSize: "17px", fontWeight: "500", color: "#f87171", fontFamily: "Georgia, serif", marginBottom: "0.75rem" }}>
+          Delete account
+        </h2>
+        <p style={{ fontSize: "13px", color: "#64748b", fontFamily: "Georgia, serif", lineHeight: "1.7", marginBottom: "1.25rem" }}>
+          This is permanent. All your chats, projects, and data will be deleted and cannot be recovered.
+        </p>
+        <p style={{ fontSize: "12px", color: "#475569", fontFamily: "monospace", marginBottom: "0.5rem" }}>
+          Type <span style={{ color: "#94a3b8" }}>delete my account</span> to confirm:
+        </p>
+        {error && (
+          <div style={{ fontSize: "12px", color: "#f87171", fontFamily: "Georgia, serif", marginBottom: "0.75rem" }}>{error}</div>
+        )}
+        <input
+          autoFocus
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleDelete()}
+          placeholder="delete my account"
+          style={{
+            width: "100%", background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.2)",
+            borderRadius: "8px", padding: "10px 12px", color: "#e2e8f0",
+            fontSize: "13px", fontFamily: "monospace", outline: "none",
+            boxSizing: "border-box", marginBottom: "1rem",
+          }}
+          onFocus={e => e.target.style.borderColor = "rgba(239,68,68,0.5)"}
+          onBlur={e => e.target.style.borderColor = "rgba(239,68,68,0.2)"}
+        />
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={onClose} style={{
+            flex: 1, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: "8px", padding: "10px", fontSize: "13px",
+            fontFamily: "Georgia, serif", color: "#64748b", cursor: "pointer",
+          }}>Cancel</button>
+          <button onClick={handleDelete} disabled={deleting} style={{
+            flex: 1, background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)",
+            borderRadius: "8px", padding: "10px", fontSize: "13px",
+            fontFamily: "Georgia, serif", color: "#f87171", cursor: deleting ? "not-allowed" : "pointer",
+            opacity: deleting ? 0.7 : 1,
+          }}>
+            {deleting ? "Deleting…" : "Delete account"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────
+export default function SettingsPage() {
+  const router = useRouter();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [statusMsg, setStatusMsg] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) { router.replace("/chat"); return; }
+      const u = session.user;
+      setUser({
+        id: u.id,
+        name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "User",
+        email: u.email,
+        provider: u.app_metadata?.provider || "email",
+        createdAt: u.created_at
+          ? new Date(u.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+          : "—",
+      });
+      setLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) router.replace("/");
+    });
+    return () => subscription.unsubscribe();
+  }, [router]);
+
+  async function handleUpdateName(newName) {
+    const { error } = await supabase.auth.updateUser({ data: { full_name: newName } });
+    if (!error) setUser(prev => ({ ...prev, name: newName }));
+  }
+
+  async function handleSendPasswordReset() {
+    if (!user?.email) return;
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/settings`,
+    });
+    if (!error) {
+      setStatusMsg("Password reset email sent. Check your inbox.");
+      setTimeout(() => setStatusMsg(""), 4000);
+    }
+  }
+
+  async function handleSignOut() {
+    await fetch("/api/auth/signout", { method: "DELETE" });
+    await supabase.auth.signOut();
+    router.replace("/");
+  }
+
+  async function handleDeleteAccount() {
+    try {
+      await fetch("/api/account/delete", { method: "DELETE" });
+      await supabase.auth.signOut();
+      router.replace("/");
+    } catch {
+      // Sign out anyway
+      await supabase.auth.signOut();
+      router.replace("/");
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#060a10", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ display: "flex", gap: "6px" }}>
+          {[0, 1, 2].map(i => (
+            <span key={i} style={{
+              width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6",
+              display: "inline-block", animation: "pulse 1.2s ease-in-out infinite",
+              animationDelay: `${i * 0.2}s`,
+            }} />
+          ))}
+        </div>
+        <style>{`@keyframes pulse{0%,100%{opacity:0.3;transform:scale(0.8)}50%{opacity:1;transform:scale(1)}}`}</style>
+      </div>
+    );
+  }
+
+  const isGoogleUser = user?.provider === "google";
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#060a10", color: "#e2e8f0", display: "flex", flexDirection: "column" }}>
+      {/* Nav */}
+      <nav style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0.85rem 1.5rem",
+        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        flexShrink: 0,
+      }}>
+        <Link href="/" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none" }}>
+          <div style={{
+            width: "28px", height: "28px", borderRadius: "7px",
+            background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: "13px", fontWeight: "700", color: "#fff", fontFamily: "monospace",
+          }}>N</div>
+          <span style={{ fontSize: "16px", color: "#e2e8f0", letterSpacing: "0.02em", fontFamily: "Georgia, serif" }}>Nexion</span>
+        </Link>
+        <Link href="/chat" style={{ fontSize: "13px", color: "#475569", textDecoration: "none", fontFamily: "Georgia, serif" }}
+          onMouseEnter={e => e.currentTarget.style.color = "#94a3b8"}
+          onMouseLeave={e => e.currentTarget.style.color = "#475569"}
+        >← Back to chat</Link>
+      </nav>
+
+      <main style={{ flex: 1, maxWidth: "640px", margin: "0 auto", width: "100%", padding: "2.5rem 1.5rem" }}>
+        {/* Page header */}
+        <div style={{ marginBottom: "2.5rem" }}>
+          <h1 style={{ fontSize: "clamp(1.5rem, 3vw, 1.9rem)", fontWeight: "400", letterSpacing: "-0.02em", fontFamily: "Georgia, serif", color: "#e2e8f0", margin: 0 }}>
+            Account{" "}
+            <span style={{ fontStyle: "italic", color: "#60a5fa" }}>settings</span>
+          </h1>
+          <p style={{ fontSize: "13px", color: "#334155", fontFamily: "Georgia, serif", marginTop: "6px" }}>
+            Manage your profile, password, and account data.
+          </p>
         </div>
 
-        <nav className="tn">
-          <button
-            className={`tb ${activeTab === "general" ? "act" : ""}`}
-            onClick={() => setActiveTab("general")}
-          >
-            <span>⊞</span> General
-          </button>
-          <button
-            className={`tb ${activeTab === "account" ? "act" : ""}`}
-            onClick={() => setActiveTab("account")}
-          >
-            <span>◈</span> Account
-          </button>
-        </nav>
-
-        {user && <div className="sb-email">{user.email}</div>}
-      </aside>
-
-      {/* ── Main ───────────────────────────────────────────────────────── */}
-      <main className="mc">
-
-        {/* Toast */}
-        {toast && (
-          <div className={`toast ${toast.type}`}>{toast.text}</div>
+        {/* Status message */}
+        {statusMsg && (
+          <div style={{
+            background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)",
+            borderRadius: "8px", padding: "10px 14px", fontSize: "13px",
+            color: "#4ade80", fontFamily: "Georgia, serif", marginBottom: "1.5rem",
+            display: "flex", alignItems: "center", gap: "8px",
+          }}>
+            <IconCheck /> {statusMsg}
+          </div>
         )}
 
-        {/* ── GENERAL TAB ──────────────────────────────────────────────── */}
-        {activeTab === "general" && (
-          <div>
-            <header className="ph">
-              <h1>General</h1>
-              <p>Manage your profile and preferences</p>
-            </header>
+        {/* ── Profile ── */}
+        <Section title="PROFILE">
+          <Row icon={<IconUser />} label="Display name" description="Shown in your sidebar and chat.">
+            <EditableField value={user?.name} onSave={handleUpdateName} placeholder="Your name" />
+          </Row>
+          <Row icon={<IconUser />} label="Email" description="Your sign-in email." last>
+            <span style={{ fontSize: "13px", color: "#64748b", fontFamily: "Georgia, serif" }}>
+              {user?.email}
+            </span>
+          </Row>
+        </Section>
 
-            {/* Profile section */}
-            <section className="sec">
-              <h2 className="st">Profile</h2>
-
-              {/* Avatar row */}
-              <div className="av-row">
-                <div
-                  className="av-wrap"
-                  onClick={() => fileRef.current?.click()}
-                  onKeyDown={(e) => e.key === "Enter" && fileRef.current?.click()}
-                  tabIndex={0}
-                  role="button"
-                  aria-label="Change profile photo"
-                >
-                  {avatar
-                    ? <img src={avatar} alt="Profile photo" className="av-img" />
-                    : (
-                      <span className="av-ph">
-                        {fullName?.[0]?.toUpperCase()
-                          || user?.email?.[0]?.toUpperCase()
-                          || "?"}
-                      </span>
-                    )
-                  }
-                  <div className="av-ov"><span>Edit</span></div>
-                </div>
-
-                <div className="av-meta">
-                  <button className="btn-o" onClick={() => fileRef.current?.click()}>
-                    Upload photo
-                  </button>
-                  {avatar && (
-                    <button className="btn-g" onClick={handleRemoveAvatar}>
-                      Remove
-                    </button>
-                  )}
-                  <p className="hint">PNG or JPG · max 2 MB</p>
-                </div>
-
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  style={{ display: "none" }}
-                  onChange={handleAvatarChange}
-                />
-              </div>
-
-              {/* Name / nickname / role fields */}
-              <div className="fg">
-                <div className="f">
-                  <label htmlFor="fullName">Full Name</label>
-                  <input
-                    id="fullName"
-                    type="text"
-                    placeholder="e.g. Maria Santos"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                  />
-                </div>
-
-                <div className="f">
-                  <label htmlFor="nickname">What should Nexion call you?</label>
-                  <input
-                    id="nickname"
-                    type="text"
-                    placeholder="e.g. Mari"
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
-                  />
-                </div>
-
-                <div className="f fw">
-                  <label htmlFor="researcherType">What kind of researcher are you?</label>
-                  <div className="sw">
-                    <select
-                      id="researcherType"
-                      value={researcherType}
-                      onChange={(e) => setResearcherType(e.target.value)}
-                    >
-                      <option value="" disabled>Select your role…</option>
-                      {RESEARCHER_TYPES.map((r) => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
-                    <span className="sa">▾</span>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <div className="div" />
-
-            {/* Preferences section */}
-            <section className="sec">
-              <h2 className="st">Preferences</h2>
-
-              <div className="f">
-                <label>Appearance</label>
-                <div className="tg" role="group" aria-label="Appearance options">
-                  {APPEARANCE_OPTIONS.map((o) => (
-                    <button
-                      key={o.value}
-                      className={`tb2 ${appearance === o.value ? "sel" : ""}`}
-                      onClick={() => setAppearance(o.value)}
-                      aria-pressed={appearance === o.value}
-                    >
-                      <span>{o.icon}</span>{o.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="f" style={{ marginTop: 20 }}>
-                <label htmlFor="chatFont">Chat Font</label>
-                <div className="sw" style={{ maxWidth: 280 }}>
-                  <select
-                    id="chatFont"
-                    value={chatFont}
-                    onChange={(e) => setChatFont(e.target.value)}
-                    style={{ fontFamily: chatFont }}
-                  >
-                    {FONT_OPTIONS.map((f) => (
-                      <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
-                        {f.label}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="sa">▾</span>
-                </div>
-                <p className="hint" style={{ fontFamily: chatFont, marginTop: 8 }}>
-                  Preview: The quick brown fox jumps over the lazy dog.
-                </p>
-              </div>
-            </section>
-
-            <div style={{ marginTop: 36 }}>
+        {/* ── Security ── */}
+        <Section title="SECURITY">
+          {isGoogleUser ? (
+            <Row icon={<IconLock />} label="Password" description="You signed in with Google. Password login is not enabled." last>
+              <span style={{ fontSize: "11px", color: "#334155", fontFamily: "monospace", letterSpacing: "0.05em" }}>GOOGLE SSO</span>
+            </Row>
+          ) : (
+            <Row icon={<IconLock />} label="Password" description="Send a reset link to your email." last>
               <button
-                className="btn-p"
-                onClick={handleSave}
-                disabled={saving}
+                onClick={handleSendPasswordReset}
+                style={{
+                  background: "none", border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "6px", padding: "5px 12px", cursor: "pointer",
+                  color: "#64748b", fontSize: "11px", fontFamily: "monospace",
+                  letterSpacing: "0.05em", transition: "all 0.15s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color = "#94a3b8"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)"; }}
+                onMouseLeave={e => { e.currentTarget.style.color = "#64748b"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; }}
               >
-                {saving ? "Saving…" : "Save changes"}
+                SEND RESET EMAIL
               </button>
-            </div>
-          </div>
-        )}
+            </Row>
+          )}
+        </Section>
 
-        {/* ── ACCOUNT TAB ──────────────────────────────────────────────── */}
-        {activeTab === "account" && (
-          <div>
-            <header className="ph">
-              <h1>Account</h1>
-              <p>Manage your account and active sessions</p>
-            </header>
+        {/* ── Account info ── */}
+        <Section title="ACCOUNT">
+          <Row icon={<IconUser />} label="Member since" description={user?.createdAt} />
+          <Row icon={<IconUser />} label="Sign-in method" description={isGoogleUser ? "Google OAuth" : "Email & password"} last />
+        </Section>
 
-            {/* Account actions */}
-            <section className="sec">
-              <h2 className="st">Account Actions</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-
-                <div className="ac">
-                  <div>
-                    <h3>Log out</h3>
-                    <p>Sign out of your current session on this device.</p>
-                  </div>
-                  <button
-                    className="btn-o"
-                    onClick={handleLogout}
-                    disabled={loggingOut}
-                  >
-                    {loggingOut ? "Logging out…" : "Log out"}
-                  </button>
-                </div>
-
-                <div className="ac danger">
-                  <div>
-                    <h3>Delete account</h3>
-                    <p>
-                      Permanently removes your account, all chats, projects, and
-                      messages. Cannot be undone.
-                    </p>
-                  </div>
-                  <button
-                    className="btn-d"
-                    onClick={() => setShowDeleteConfirm(true)}
-                  >
-                    Delete account
-                  </button>
-                </div>
-
-              </div>
-            </section>
-
-            <div className="div" />
-
-            {/* Sessions */}
-            <section className="sec">
-              <h2 className="st">Active Sessions</h2>
-              <p className="hint" style={{ marginBottom: 16 }}>
-                Showing your current session. To manage all devices, use the
-                Supabase dashboard.
-              </p>
-              <div style={{ overflowX: "auto" }}>
-                <table className="tbl">
-                  <thead>
-                    <tr>
-                      <th>Device</th>
-                      <th>Created</th>
-                      <th>Last active</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sessions.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={4}
-                          style={{ color: "#4a4845", textAlign: "center", padding: "24px 0" }}
-                        >
-                          No session data available
-                        </td>
-                      </tr>
-                    ) : (
-                      sessions.map((s, i) => (
-                        <tr key={s.id || i} className={s.current ? "cs" : ""}>
-                          <td>
-                            <span className="dn">{parseDevice(s.user_agent)}</span>
-                            {s.current && <span className="bc">Current</span>}
-                          </td>
-                          <td>{fmt(s.created_at)}</td>
-                          <td>{fmt(s.updated_at)}</td>
-                          <td>
-                            {!s.current && (
-                              <button
-                                className="btn-r"
-                                onClick={() => handleRevokeSession(s.id)}
-                              >
-                                Revoke
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </div>
-        )}
+        {/* ── Danger zone ── */}
+        <Section title="DANGER ZONE">
+          <Row
+            icon={<IconLogout />}
+            label="Sign out"
+            description="End your current session."
+          >
+            <button
+              onClick={handleSignOut}
+              style={{
+                background: "none", border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "6px", padding: "5px 12px", cursor: "pointer",
+                color: "#64748b", fontSize: "11px", fontFamily: "monospace",
+                letterSpacing: "0.05em", transition: "all 0.15s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = "#f87171"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.3)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = "#64748b"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; }}
+            >
+              SIGN OUT
+            </button>
+          </Row>
+          <Row
+            icon={<IconTrash />}
+            label="Delete account"
+            description="Permanently remove all your data. This cannot be undone."
+            last
+          >
+            <button
+              onClick={() => setDeleteModalOpen(true)}
+              style={{
+                background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
+                borderRadius: "6px", padding: "5px 12px", cursor: "pointer",
+                color: "#f87171", fontSize: "11px", fontFamily: "monospace",
+                letterSpacing: "0.05em", transition: "all 0.15s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.14)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
+            >
+              DELETE
+            </button>
+          </Row>
+        </Section>
       </main>
 
-      {/* ── Delete confirmation modal ─────────────────────────────────── */}
-      {showDeleteConfirm && (
-        <div
-          className="mb"
-          onClick={() => !deleting && setShowDeleteConfirm(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-modal-title"
-        >
-          <div className="mo" onClick={(e) => e.stopPropagation()}>
-            <h2 id="delete-modal-title">Delete account?</h2>
-            <p>
-              This will permanently delete your account and{" "}
-              <strong>all chats, projects, and messages</strong>. This action{" "}
-              <strong>cannot be undone</strong>.
-            </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button
-                className="btn-o"
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={deleting}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn-d"
-                onClick={handleDeleteAccount}
-                disabled={deleting}
-              >
-                {deleting ? "Deleting…" : "Yes, delete my account"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteModal
+        open={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleDeleteAccount}
+      />
 
-      {/* ── Styles ─────────────────────────────────────────────────────── */}
       <style>{`
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        /* Layout */
-        .sr  { display: flex; min-height: 100vh; background: #0d0e11; color: #e8e6e1; font-family: 'Georgia', 'Times New Roman', serif; }
-
-        /* Sidebar */
-        .sb  { width: 220px; flex-shrink: 0; background: #111318; border-right: 1px solid #1e2029; display: flex; flex-direction: column; padding: 28px 16px; gap: 32px; position: sticky; top: 0; height: 100vh; }
-        .sb-logo { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
-        .lm  { width: 30px; height: 30px; background: linear-gradient(135deg, #c9a96e, #e8d5a3); border-radius: 7px; display: grid; place-items: center; font-family: 'Georgia', serif; font-weight: 700; font-size: 16px; color: #0d0e11; }
-        .lt  { font-size: 17px; font-weight: 600; letter-spacing: .04em; color: #e8e6e1; }
-        .sb-email { margin-top: auto; padding: 10px 12px; font-size: 11px; color: #3a3835; font-family: system-ui, sans-serif; word-break: break-all; }
-
-        /* Sidebar nav */
-        .tn  { display: flex; flex-direction: column; gap: 4px; }
-        .tb  { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: none; background: transparent; color: #7a7875; font-family: inherit; font-size: 14px; cursor: pointer; text-align: left; transition: all .15s; letter-spacing: .02em; }
-        .tb:hover { background: #1a1c23; color: #c9a96e; }
-        .tb.act   { background: #1a1c23; color: #c9a96e; font-weight: 600; }
-
-        /* Main content */
-        .mc  { flex: 1; overflow-y: auto; padding: 48px 56px; max-width: 760px; position: relative; }
-        .ph  { margin-bottom: 36px; }
-        .ph h1 { font-size: 26px; font-weight: 700; color: #f0ece4; letter-spacing: -.01em; margin-bottom: 6px; }
-        .ph p  { font-size: 14px; color: #5a5855; font-family: system-ui, sans-serif; }
-
-        /* Sections */
-        .sec { margin-bottom: 32px; }
-        .st  { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #c9a96e; margin-bottom: 20px; font-family: system-ui, sans-serif; font-weight: 600; }
-        .div { border: none; border-top: 1px solid #1e2029; margin: 32px 0; }
-
-        /* Avatar */
-        .av-row  { display: flex; align-items: center; gap: 20px; margin-bottom: 28px; }
-        .av-wrap { width: 72px; height: 72px; border-radius: 50%; background: #1e2029; border: 2px solid #2a2c35; overflow: hidden; cursor: pointer; position: relative; flex-shrink: 0; transition: border-color .2s; }
-        .av-wrap:hover, .av-wrap:focus { border-color: #c9a96e; outline: none; }
-        .av-wrap:hover .av-ov { opacity: 1; }
-        .av-img  { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .av-ph   { width: 100%; height: 100%; display: grid; place-items: center; font-size: 26px; color: #4a4845; font-weight: 700; }
-        .av-ov   { position: absolute; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; opacity: 0; transition: opacity .2s; font-size: 11px; color: #e8d5a3; font-family: system-ui, sans-serif; letter-spacing: .05em; }
-        .av-meta { display: flex; flex-direction: column; gap: 8px; }
-
-        /* Form */
-        .hint { font-size: 12px; color: #4a4845; font-family: system-ui, sans-serif; }
-        .fg   { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-        .fw   { grid-column: 1 / -1; }
-        .f    { display: flex; flex-direction: column; gap: 8px; }
-        .f label { font-size: 13px; color: #9a9690; font-family: system-ui, sans-serif; }
-        .f input, .f select { background: #14161c; border: 1px solid #1e2029; border-radius: 8px; padding: 10px 14px; color: #e8e6e1; font-family: inherit; font-size: 14px; outline: none; transition: border-color .15s; width: 100%; appearance: none; }
-        .f input::placeholder { color: #3a3835; }
-        .f input:focus, .f select:focus { border-color: #c9a96e; }
-        .sw  { position: relative; }
-        .sw select { padding-right: 32px; cursor: pointer; }
-        .sa  { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #5a5855; font-size: 12px; pointer-events: none; }
-
-        /* Appearance toggle */
-        .tg  { display: flex; gap: 8px; background: #14161c; border: 1px solid #1e2029; border-radius: 10px; padding: 5px; width: fit-content; }
-        .tb2 { display: flex; align-items: center; gap: 7px; padding: 8px 18px; border-radius: 7px; border: none; background: transparent; color: #5a5855; font-family: system-ui, sans-serif; font-size: 13px; cursor: pointer; transition: all .18s; }
-        .tb2:hover   { color: #c9a96e; }
-        .tb2.sel     { background: #1e2029; color: #e8d5a3; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
-
-        /* Buttons */
-        .btn-p { padding: 10px 24px; background: linear-gradient(135deg, #c9a96e, #e8d5a3); border: none; border-radius: 8px; color: #0d0e11; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity .15s; letter-spacing: .02em; }
-        .btn-p:hover:not(:disabled) { opacity: .88; }
-        .btn-p:disabled { opacity: .45; cursor: not-allowed; }
-
-        .btn-o { padding: 9px 18px; background: transparent; border: 1px solid #2a2c35; border-radius: 8px; color: #9a9690; font-family: system-ui, sans-serif; font-size: 13px; cursor: pointer; transition: all .15s; white-space: nowrap; }
-        .btn-o:hover:not(:disabled) { border-color: #c9a96e; color: #c9a96e; }
-        .btn-o:disabled { opacity: .4; cursor: not-allowed; }
-
-        .btn-g { padding: 9px 14px; background: transparent; border: none; color: #5a5855; font-family: system-ui, sans-serif; font-size: 13px; cursor: pointer; transition: color .15s; }
-        .btn-g:hover { color: #e8e6e1; }
-
-        .btn-d { padding: 9px 18px; background: transparent; border: 1px solid #4a1e1e; border-radius: 8px; color: #c45c5c; font-family: system-ui, sans-serif; font-size: 13px; cursor: pointer; transition: all .15s; white-space: nowrap; }
-        .btn-d:hover:not(:disabled) { background: #3a1515; border-color: #c45c5c; }
-        .btn-d:disabled { opacity: .4; cursor: not-allowed; }
-
-        /* Account action cards */
-        .ac { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 18px 20px; background: #14161c; border: 1px solid #1e2029; border-radius: 10px; }
-        .ac h3 { font-size: 14px; color: #e8e6e1; margin-bottom: 4px; font-family: system-ui, sans-serif; }
-        .ac p  { font-size: 13px; color: #5a5855; font-family: system-ui, sans-serif; line-height: 1.5; max-width: 360px; }
-        .ac.danger { border-color: #2a1515; }
-
-        /* Sessions table */
-        .tbl    { width: 100%; border-collapse: collapse; font-family: system-ui, sans-serif; font-size: 13px; }
-        .tbl th { text-align: left; padding: 10px 14px; color: #4a4845; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; border-bottom: 1px solid #1e2029; font-weight: 600; }
-        .tbl td { padding: 14px; color: #9a9690; border-bottom: 1px solid #16181f; vertical-align: middle; }
-        .tbl tr:last-child td { border-bottom: none; }
-        .tbl tr:hover td { background: #14161c; }
-        .cs td  { color: #c9c5be; }
-        .dn     { color: #d8d4ce; }
-        .bc     { display: inline-block; margin-left: 8px; padding: 2px 7px; background: #1a2a1a; border: 1px solid #2a4a2a; border-radius: 4px; font-size: 10px; color: #6aaa6a; letter-spacing: .05em; vertical-align: middle; }
-        .btn-r  { padding: 5px 12px; background: transparent; border: 1px solid #2a2c35; border-radius: 6px; color: #5a5855; font-family: inherit; font-size: 12px; cursor: pointer; transition: all .15s; }
-        .btn-r:hover { border-color: #c45c5c; color: #c45c5c; }
-
-        /* Delete modal */
-        .mb  { position: fixed; inset: 0; background: rgba(0,0,0,.72); display: grid; place-items: center; z-index: 100; backdrop-filter: blur(4px); }
-        .mo  { background: #14161c; border: 1px solid #2a1515; border-radius: 14px; padding: 32px; max-width: 420px; width: 90%; }
-        .mo h2 { font-size: 20px; color: #f0ece4; margin-bottom: 12px; }
-        .mo p  { font-size: 14px; color: #6a6865; font-family: system-ui, sans-serif; line-height: 1.6; margin-bottom: 24px; }
-        .mo strong { color: #c9c5be; }
-
-        /* Toast */
-        .toast { position: fixed; top: 24px; right: 24px; z-index: 200; padding: 12px 20px; border-radius: 8px; font-family: system-ui, sans-serif; font-size: 13px; animation: fsi .2s ease; pointer-events: none; }
-        .toast.success { background: #1a2a1a; border: 1px solid #2a4a2a; color: #6aaa6a; }
-        .toast.error   { background: #2a1515; border: 1px solid #4a2a2a; color: #c45c5c; }
-        @keyframes fsi { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* Scrollbar */
-        .mc::-webkit-scrollbar       { width: 5px; }
-        .mc::-webkit-scrollbar-track { background: transparent; }
-        .mc::-webkit-scrollbar-thumb { background: #2a2c35; border-radius: 10px; }
-
-        /* Spin animation for loading */
-        @keyframes spin { to { transform: rotate(360deg); } }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+        input::placeholder { color: #334155; }
+        @keyframes pulse { 0%,100%{opacity:0.3;transform:scale(0.8)} 50%{opacity:1;transform:scale(1)} }
       `}</style>
     </div>
   );
