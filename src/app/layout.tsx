@@ -16,6 +16,14 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "Nexion",
   description: "Your AI thesis research companion",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

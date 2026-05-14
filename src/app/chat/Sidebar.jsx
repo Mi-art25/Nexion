@@ -420,6 +420,7 @@ export default function Sidebar({ open, onOpen, onClose, recents, onToggleFavori
   const [favOpen, setFavOpen] = useState(true);
   const [recentsOpen, setRecentsOpen] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
+  const isLoggedIn = Boolean(user);
 
   const favorites = recents.filter(r => r.favorited);
   const recentOnly = recents.filter(r => !r.favorited);
@@ -451,7 +452,7 @@ export default function Sidebar({ open, onOpen, onClose, recents, onToggleFavori
         <div style={{ height: "1px", background: "rgba(255,255,255,0.05)", width: "32px", margin: "6px 0" }} />
 
         <RailBtn icon={<IconHome />}    title="Home"     href="/" />
-        <RailBtn icon={<IconNewChat />} title="New chat" onClick={onNewChat} />
+        <RailBtn icon={<IconNewChat />} title="New chat" onClick={() => { if (!isLoggedIn) { onLoginClick?.(); return; } onNewChat(); }} />
 
         <div style={{ height: "1px", background: "rgba(255,255,255,0.05)", width: "32px", margin: "6px 0" }} />
 
@@ -538,7 +539,7 @@ export default function Sidebar({ open, onOpen, onClose, recents, onToggleFavori
           <IconHome />Home
         </Link>
 
-        <button onClick={() => { onNewChat(); onClose(); }} style={{
+        <button onClick={() => { if (!isLoggedIn) { onLoginClick?.(); return; } onNewChat(); onClose(); }} style={{
           display: "flex", alignItems: "center", gap: "10px",
           width: "100%", padding: "8px 10px", borderRadius: "8px",
           background: "none", border: "none", cursor: "pointer",
@@ -567,15 +568,20 @@ export default function Sidebar({ open, onOpen, onClose, recents, onToggleFavori
         {searchOpen && (
           <div style={{ padding: "4px 10px 8px" }}>
             <input
-              autoFocus
+              autoFocus={isLoggedIn}
+              readOnly={!isLoggedIn}
+              aria-disabled={!isLoggedIn}
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search chats…"
+              onFocus={() => { if (!isLoggedIn) onLoginClick?.(); }}
+              onClick={() => { if (!isLoggedIn) onLoginClick?.(); }}
+              onChange={e => { if (isLoggedIn) setSearchQuery(e.target.value); }}
+              placeholder={isLoggedIn ? "Search chats..." : "Log in to search chats"}
               style={{
                 width: "100%", background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.08)", borderRadius: "6px",
-                padding: "6px 10px", color: "#e2e8f0", fontSize: "12px",
+                border: `1px solid ${isLoggedIn ? "rgba(255,255,255,0.08)" : "rgba(96,165,250,0.22)"}`, borderRadius: "6px",
+                padding: "6px 10px", color: isLoggedIn ? "#e2e8f0" : "#64748b", fontSize: "12px",
                 fontFamily: "Georgia, serif", outline: "none", boxSizing: "border-box",
+                cursor: isLoggedIn ? "text" : "pointer",
               }}
             />
           </div>

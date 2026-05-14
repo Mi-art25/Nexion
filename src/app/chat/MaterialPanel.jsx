@@ -35,6 +35,7 @@ function deriveTitle(content) {
 
 export default function MaterialPanel({ open, content, onClose }) {
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const materialTitle = deriveTitle(content);
 
@@ -54,6 +55,8 @@ export default function MaterialPanel({ open, content, onClose }) {
     a.download = `${title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   }
 
   return (
@@ -105,15 +108,16 @@ export default function MaterialPanel({ open, content, onClose }) {
           </button>
           <button onClick={handleDownload} title="Download as .txt" style={{
             display: "flex", alignItems: "center", gap: "4px",
-            background: "none", border: "1px solid rgba(255,255,255,0.07)",
+            background: saved ? "rgba(59,130,246,0.1)" : "none",
+            border: `1px solid ${saved ? "rgba(59,130,246,0.3)" : "rgba(255,255,255,0.07)"}`,
             borderRadius: "6px", padding: "5px 8px", cursor: "pointer",
-            color: "#475569", fontSize: "10px", fontFamily: "monospace",
+            color: saved ? "#60a5fa" : "#475569", fontSize: "10px", fontFamily: "monospace",
             letterSpacing: "0.04em", transition: "all 0.15s", whiteSpace: "nowrap",
           }}
-            onMouseEnter={e => { e.currentTarget.style.color = "#94a3b8"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.14)"; }}
-            onMouseLeave={e => { e.currentTarget.style.color = "#475569"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)"; }}
+            onMouseEnter={e => { if (!saved) { e.currentTarget.style.color = "#94a3b8"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.14)"; }}}
+            onMouseLeave={e => { if (!saved) { e.currentTarget.style.color = "#475569"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)"; }}}
           >
-            <IconDownload />SAVE
+            <IconDownload />{saved ? "SAVED" : "SAVE"}
           </button>
           <button onClick={onClose} title="Close panel" style={{
             display: "flex", alignItems: "center", justifyContent: "center",

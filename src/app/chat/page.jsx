@@ -118,6 +118,12 @@ export default function ChatPage() {
     deleteChat,
   } = useChats(user?.id ?? null);
 
+  function requireAuth() {
+    if (user) return true;
+    setAuthModalOpen(true);
+    return false;
+  }
+
   // ── Scroll to bottom on new messages ──────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -169,6 +175,7 @@ export default function ChatPage() {
 
   // ── Load a past chat from the sidebar ─────────────────────
   async function handleLoadChat(chatId) {
+    if (!requireAuth()) return;
     const pastMessages = await loadChat(chatId);
     if (pastMessages.length > 0) {
       setMessages(pastMessages); // replace current messages
@@ -180,11 +187,12 @@ export default function ChatPage() {
   // ── Send a message + persist both turns ───────────────────
   async function handleSend() {
     const trimmed = input.trim();
-    if ((!trimmed && attachments.length === 0) || isLoading) return;
+    if (isLoading) return;
     if (!user) {
       setAuthModalOpen(true);
       return;
     }
+    if (!trimmed && attachments.length === 0) return;
     setInput("");
 
     const pdfAttachment = attachments.find(a => a.type === "application/pdf");
@@ -217,6 +225,7 @@ export default function ChatPage() {
 
   // ── New chat ───────────────────────────────────────────────
   function handleNewChat() {
+    if (!requireAuth()) return;
     startNewChat();
     clearMessages();
     setMaterialOpen(false);
@@ -233,6 +242,10 @@ export default function ChatPage() {
   }
 
   function handleKeyDown(e) {
+    if (!user) {
+      setAuthModalOpen(true);
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   }
 
@@ -256,12 +269,20 @@ export default function ChatPage() {
   }
 
   function handleFileInput(e) {
+    if (!requireAuth()) {
+      e.target.value = "";
+      return;
+    }
     const files = Array.from(e.target.files || []);
     if (files.length) addFiles(files, "file");
     e.target.value = "";
   }
 
   function handleImageInput(e) {
+    if (!requireAuth()) {
+      e.target.value = "";
+      return;
+    }
     const files = Array.from(e.target.files || []);
     if (files.length) addFiles(files, "image");
     e.target.value = "";
@@ -272,6 +293,11 @@ export default function ChatPage() {
   }
 
   function handlePaste(e) {
+    if (!user) {
+      e.preventDefault();
+      setAuthModalOpen(true);
+      return;
+    }
     const items = Array.from(e.clipboardData?.items || []);
     const pasteFiles = items
       .filter(item => item.kind === "file")
@@ -431,7 +457,7 @@ export default function ChatPage() {
                 <input ref={imageInputRef} type="file" multiple accept="image/*" style={{ display: "none" }} onChange={handleImageInput} />
 
                 <div ref={dropdownRef} style={{ position: "relative", flexShrink: 0, zIndex: 100 }}>
-                  <button onClick={() => setPlusOpen(p => !p)} title="Attach image or file"
+                  <button onClick={() => { if (!requireAuth()) return; setPlusOpen(p => !p); }} title="Attach image or file"
                     style={{ width: "34px", height: "34px", borderRadius: "8px", background: plusOpen ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.04)", border: plusOpen ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.08)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: plusOpen ? "#60a5fa" : "#475569", transition: "all 0.15s", transform: plusOpen ? "rotate(45deg)" : "rotate(0deg)" }}
                     onMouseEnter={e => { if (!plusOpen) { e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)"; e.currentTarget.style.color = "#94a3b8"; }}}
                     onMouseLeave={e => { if (!plusOpen) { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#475569"; }}}
@@ -443,6 +469,7 @@ export default function ChatPage() {
                     <div style={{ position: "absolute", bottom: "calc(100% + 8px)", left: "0", background: "#0d1424", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.6)", minWidth: "175px", zIndex: 9999, animation: "slideUpSmooth 0.2s cubic-bezier(0.34,1.4,0.64,1)" }}>
                       <button
                         onClick={() => {
+                          if (!requireAuth()) return;
                           const input = document.createElement("input");
                           input.type = "file";
                           input.multiple = true;
@@ -471,7 +498,9 @@ export default function ChatPage() {
                 <textarea
                   ref={inputRef}
                   value={input}
-                  onChange={e => setInput(e.target.value)}
+                  readOnly={!user}
+                  onFocus={() => { if (!user) setAuthModalOpen(true); }}
+                  onChange={e => { if (user) setInput(e.target.value); }}
                   onKeyDown={handleKeyDown}
                   onPaste={handlePaste}
                   placeholder={!user ? "Log in to save chats and continue" : attachments.length > 0 ? "Add a message or just send…" : "Ask about your thesis…"}
@@ -479,8 +508,8 @@ export default function ChatPage() {
                   style={{ flex: 1, background: "none", border: "none", outline: "none", color: "#e2e8f0", fontSize: "14px", fontFamily: "Georgia, serif", lineHeight: "1.6", resize: "none", maxHeight: "140px", overflowY: "auto" }}
                   onInput={e => { e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px"; }}
                 />
-                <button onClick={handleSend} disabled={isLoading || (!input.trim() && attachments.length === 0) || !user}
-                  style={{ width: "34px", height: "34px", borderRadius: "8px", background: (input.trim() || attachments.length > 0) && !isLoading && user ? "#1d4ed8" : "rgba(255,255,255,0.05)", border: "none", cursor: (input.trim() || attachments.length > 0) && !isLoading && user ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.15s", fontSize: "16px", color: (input.trim() || attachments.length > 0) && !isLoading && user ? "#fff" : "#334155" }}
+                <button onClick={handleSend} disabled={isLoading || (user && !input.trim() && attachments.length === 0)}
+                  style={{ width: "34px", height: "34px", borderRadius: "8px", background: (input.trim() || attachments.length > 0 || !user) && !isLoading ? "#1d4ed8" : "rgba(255,255,255,0.05)", border: "none", cursor: !isLoading && (!user || input.trim() || attachments.length > 0) ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.15s", fontSize: "16px", color: (input.trim() || attachments.length > 0 || !user) && !isLoading ? "#fff" : "#334155" }}
                 >↑</button>
               </div>
             </div>
@@ -508,7 +537,7 @@ export default function ChatPage() {
         ::-webkit-scrollbar{width:4px}
         ::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:2px}
-        textarea::placeholder,input::placeholder{color:#1e293b}
+        textarea::placeholder,input::placeholder{color:#64748b;opacity:1}
       `}</style>
     </div>
   );

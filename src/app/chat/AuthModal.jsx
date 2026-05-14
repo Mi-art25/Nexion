@@ -109,6 +109,7 @@ export default function AuthModal({ isOpen, onClose }) {
               </div>
             )}
             <input
+              className="auth-modal-input"
               type="text"
               inputMode="numeric"
               placeholder="6-digit code"
@@ -145,6 +146,9 @@ export default function AuthModal({ isOpen, onClose }) {
             </button>
           </form>
         </div>
+        <style>{`
+          .auth-modal-input::placeholder{color:#94a3b8;opacity:1}
+        `}</style>
       </div>
     );
   }
@@ -264,18 +268,18 @@ export default function AuthModal({ isOpen, onClose }) {
 
           {isSignup && (
             <>
-              <input type="text" placeholder="First Name" value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle}
+              <input className="auth-modal-input" type="text" placeholder="First Name" value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle}
                 onFocus={e => e.target.style.borderColor = "rgba(59,130,246,0.5)"}
                 onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
               />
-              <input type="text" placeholder="Last Name" value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle}
+              <input className="auth-modal-input" type="text" placeholder="Last Name" value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle}
                 onFocus={e => e.target.style.borderColor = "rgba(59,130,246,0.5)"}
                 onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
               />
             </>
           )}
 
-          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle}
+          <input className="auth-modal-input" type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle}
             onFocus={e => e.target.style.borderColor = "rgba(59,130,246,0.5)"}
             onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
           />
@@ -283,6 +287,7 @@ export default function AuthModal({ isOpen, onClose }) {
           {/* Password */}
           <div style={{ position: "relative" }}>
             <input
+              className="auth-modal-input"
               type={showPassword ? "text" : "password"} placeholder="Password"
               value={password} onChange={e => setPassword(e.target.value)}
               style={{ ...inputStyle, paddingRight: "40px" }}
@@ -312,6 +317,7 @@ export default function AuthModal({ isOpen, onClose }) {
             <>
               <div style={{ position: "relative" }}>
                 <input
+                  className="auth-modal-input"
                   type={showConfirmPassword ? "text" : "password"} placeholder="Confirm password"
                   value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
                   style={{
@@ -369,6 +375,9 @@ export default function AuthModal({ isOpen, onClose }) {
           </button>
         </div>
       </div>
+      <style>{`
+        .auth-modal-input::placeholder{color:#94a3b8;opacity:1}
+      `}</style>
     </div>
   );
 }
