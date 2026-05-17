@@ -2,7 +2,9 @@
 
 import { useNexionChat } from "@/hooks/useNexionChat";
 import { useChats } from "@/hooks/useChats";
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense, useCallback } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Sidebar from "./Sidebar";
 import MaterialPanel from "./MaterialPanel";
@@ -40,6 +42,36 @@ const IconFile = () => (
     <polyline points="14 2 14 8 20 8"/>
   </svg>
 );
+const IconBack = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>
+  </svg>
+);
+const IconStar = () => (
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 15.1 8.3 22 9.3 17 14.2 18.2 21 12 17.8 5.8 21 7 14.2 2 9.3 8.9 8.3 12 2"/>
+  </svg>
+);
+const IconDots = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
+  </svg>
+);
+const IconWave = () => (
+  <svg width="27" height="22" viewBox="0 0 32 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+    <path d="M2 7v10M6 4v16M10 8v8M14 2v20M18 6v12M22 4v16M26 8v8M30 5v14"/>
+  </svg>
+);
+const IconStackedFiles = () => (
+  <svg width="92" height="58" viewBox="0 0 92 58" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="10" y="23" width="28" height="26" rx="5"/>
+    <rect x="35" y="23" width="30" height="26" rx="5"/>
+    <rect x="58" y="10" width="31" height="31" rx="5"/>
+    <path d="M18 31h9M18 36h14M43 31h10M43 36h15M67 18h9M67 23h14M67 28h10"/>
+    <path d="M74 34v14h14" strokeDasharray="2 2"/>
+    <path d="M73 28v10M68 33h10"/>
+  </svg>
+);
 
 const THINKING_PHASES = [
   "Reading your question…",
@@ -48,7 +80,219 @@ const THINKING_PHASES = [
   "Refining answer…",
 ];
 
+function formatRelativeTime(value) {
+  if (!value) return "No messages yet";
+  const diffSeconds = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (diffSeconds < 60) return `Last message ${diffSeconds} second${diffSeconds === 1 ? "" : "s"} ago`;
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `Last message ${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `Last message ${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `Last message ${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+}
+
+function ProjectChatCard({ chat, onOpen, onDelete }) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(chat.id)}
+      onKeyDown={e => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(chat.id);
+        }
+      }}
+      style={{
+        width: "100%",
+        minHeight: "90px",
+        background: "#121310",
+        border: "1px solid transparent",
+        borderRadius: "14px",
+        color: "#eee5cf",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "1rem",
+        padding: "20px 16px",
+        textAlign: "left",
+        transition: "border-color 0.15s, background 0.15s",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = "#2f302d"; e.currentTarget.style.background = "#151613"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "#121310"; }}
+    >
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: "18px", fontWeight: 700, color: "#f1ead8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {chat.label || "Project Chat"}
+        </span>
+        <span style={{ display: "block", marginTop: "7px", fontSize: "15px", color: "#bdb6a4" }}>
+          {formatRelativeTime(chat.updated_at)}
+        </span>
+      </span>
+      <button
+        title="Delete chat"
+        onClick={e => { e.stopPropagation(); onDelete(chat.id); }}
+        onKeyDown={e => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            e.stopPropagation();
+            onDelete(chat.id);
+          }
+        }}
+        style={{ background: "none", border: "none", color: "#898982", cursor: "pointer", display: "flex", padding: "4px", flexShrink: 0 }}
+      >
+        <IconDots />
+      </button>
+    </div>
+  );
+}
+
+function ProjectHome({
+  project,
+  loading,
+  projectChats,
+  input,
+  setInput,
+  inputRef,
+  fileInputRef,
+  imageInputRef,
+  attachments,
+  removeAttachment,
+  handleSend,
+  handleKeyDown,
+  handlePaste,
+  handleFileInput,
+  handleImageInput,
+  onOpenProjectChat,
+  onDeleteProjectChat,
+  isLoading,
+  user,
+  onRequireAuth,
+}) {
+  const description = project?.description?.trim();
+
+  return (
+    <div className="project-home" style={{
+      width: "100%",
+      maxWidth: "1460px",
+      margin: "0 auto",
+      padding: "3.25rem clamp(1rem, 3vw, 3rem)",
+      display: "grid",
+      gridTemplateColumns: "minmax(0, 1fr) minmax(320px, 538px)",
+      gap: "clamp(2rem, 4vw, 4.25rem)",
+      alignItems: "start",
+    }}>
+      <section style={{ minWidth: 0 }}>
+        <Link href="/projects" style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "#c7d2c3", textDecoration: "none", fontSize: "18px", marginBottom: "2.4rem" }}>
+          <IconBack /> All projects
+        </Link>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1.9rem" }}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ margin: "0 0 0.65rem", fontSize: "clamp(2rem, 4vw, 3.05rem)", lineHeight: 1.08, fontWeight: 600, color: "#eee5cf", wordBreak: "break-word" }}>
+              {loading ? "Loading project..." : project?.name || "Project not found"}
+            </h1>
+            <p style={{ margin: 0, color: "#d6d0bd", fontSize: "20px", lineHeight: 1.5, minHeight: "1.5em", wordBreak: "break-word" }}>
+              {description || "Start a focused chat in this project."}
+            </p>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "22px", color: "#eee5cf", flexShrink: 0 }}>
+            <button title="Project options" style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", display: "flex", padding: "4px" }}><IconDots /></button>
+            <button title="Favorite project" style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", display: "flex", padding: "4px" }}><IconStar /></button>
+          </div>
+        </div>
+
+        <div style={{ background: "#292a28", border: "1px solid #4a4b47", borderRadius: "24px", minHeight: "154px", padding: "26px", display: "flex", flexDirection: "column", justifyContent: "space-between", boxShadow: "0 10px 30px rgba(0,0,0,0.14)" }}>
+          {attachments.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
+              {attachments.map(a => (
+                <button key={a.id} onClick={() => removeAttachment(a.id)} title="Remove attachment" style={{ display: "inline-flex", alignItems: "center", gap: "7px", maxWidth: "210px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "8px", color: "#d6d0bd", padding: "7px 9px", cursor: "pointer", fontSize: "12px" }}>
+                  <IconFile />
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                  <IconClose />
+                </button>
+              ))}
+            </div>
+          )}
+
+          <textarea
+            ref={inputRef}
+            value={input}
+            readOnly={!user}
+            onFocus={() => { if (!user) onRequireAuth(); }}
+            onChange={e => { if (user) setInput(e.target.value); }}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={!user ? "Log in to start a project chat" : "How can I help you today?"}
+            rows={1}
+            style={{ width: "100%", minHeight: "48px", background: "none", border: "none", outline: "none", color: "#eee5cf", fontSize: "22px", fontFamily: "Georgia, serif", resize: "none", lineHeight: 1.45 }}
+            onInput={e => { e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 150) + "px"; }}
+          />
+
+          <input ref={fileInputRef} type="file" multiple accept=".pdf,.txt,.doc,.docx,.csv,.md" style={{ display: "none" }} onChange={handleFileInput} />
+          <input ref={imageInputRef} type="file" multiple accept="image/*" style={{ display: "none" }} onChange={handleImageInput} />
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginTop: "16px" }}>
+            <button onClick={() => { if (!onRequireAuth()) return; fileInputRef.current?.click(); }} title="Attach files" style={{ width: "36px", height: "36px", borderRadius: "50%", border: "none", background: "transparent", color: "#cfc8b7", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <IconPlus />
+            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "18px", color: "#cfc8b7" }}>
+              <button style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: "16px", fontWeight: 600 }}>Nexion AI</button>
+              <button onClick={handleSend} disabled={isLoading || (user && !input.trim() && attachments.length === 0)} title="Send" style={{ background: "none", border: "none", color: (input.trim() || attachments.length > 0 || !user) && !isLoading ? "#e9e2d0" : "#8f8d87", cursor: !isLoading && (!user || input.trim() || attachments.length > 0) ? "pointer" : "default", display: "flex", alignItems: "center", padding: "2px" }}>
+                <IconWave />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {projectChats.length > 0 ? (
+          <div style={{ marginTop: "30px", display: "flex", flexDirection: "column", gap: "10px" }}>
+            {projectChats.map(chat => (
+              <ProjectChatCard
+                key={chat.id}
+                chat={chat}
+                onOpen={onOpenProjectChat}
+                onDelete={onDeleteProjectChat}
+              />
+            ))}
+          </div>
+        ) : (
+          <div style={{ marginTop: "28px", border: "1px solid #3b3c39", borderRadius: "14px", minHeight: "108px", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", color: "#bdb6a4", fontSize: "18px", padding: "1.4rem" }}>
+            Start a chat to keep conversations organized and re-use project knowledge.
+          </div>
+        )}
+      </section>
+
+      <aside style={{ marginTop: "3.6rem", border: "1px solid #3b3c39", borderRadius: "24px", overflow: "hidden", background: "#1b1c1a" }}>
+        <div style={{ padding: "28px", display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+          <div>
+            <h2 style={{ margin: "0 0 8px", fontSize: "20px", color: "#eee5cf", fontWeight: 600 }}>Instructions</h2>
+            <p style={{ margin: 0, color: "#77736b", fontSize: "16px" }}>Add instructions to tailor Nexion&apos;s responses</p>
+          </div>
+          <button title="Add instructions" style={{ background: "none", border: "none", color: "#cfc8b7", cursor: "pointer", display: "flex", padding: "4px" }}><IconPlus /></button>
+        </div>
+        <div style={{ height: "1px", background: "#363733" }} />
+        <div style={{ padding: "24px 28px 26px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+            <h2 style={{ margin: 0, fontSize: "20px", color: "#eee5cf", fontWeight: 600 }}>Files</h2>
+            <button onClick={() => { if (!onRequireAuth()) return; fileInputRef.current?.click(); }} title="Add files" style={{ background: "none", border: "none", color: "#cfc8b7", cursor: "pointer", display: "flex", padding: "4px" }}><IconPlus /></button>
+          </div>
+          <div style={{ minHeight: "200px", background: "#141512", borderRadius: "20px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", color: "#bdb6a4", padding: "28px" }}>
+            <div style={{ color: "#5f615c", marginBottom: "20px" }}><IconStackedFiles /></div>
+            <p style={{ margin: 0, maxWidth: "310px", fontSize: "16px", lineHeight: 1.35 }}>Add PDFs, documents, or other text to reference in this project.</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 function ChatPageInner() {
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get("project");
   const { messages, isLoading, sendMessage, clearMessages, setMessages } = useNexionChat();
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -59,6 +303,9 @@ function ChatPageInner() {
   // Auth — driven entirely by supabase.auth.onAuthStateChange
   const [user, setUser] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [project, setProject] = useState(null);
+  const [projectLoading, setProjectLoading] = useState(false);
+  const [projectChats, setProjectChats] = useState([]);
 
   const [thinkingPhase, setThinkingPhase] = useState(0);
 
@@ -116,7 +363,63 @@ function ChatPageInner() {
     toggleFavorite,
     renameChat,
     deleteChat,
-  } = useChats(user?.id ?? null);
+  } = useChats(user?.id ?? null, projectId);
+
+  useEffect(() => {
+    startNewChat();
+    clearMessages();
+    setMaterialOpen(false);
+    setMaterialContent("");
+    setAttachments([]);
+    setInput("");
+    // Only reset the workspace when the selected project changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId || !user?.id) {
+      setProject(null);
+      setProjectLoading(false);
+      return;
+    }
+
+    let mounted = true;
+    setProjectLoading(true);
+    supabase
+      .from("projects")
+      .select("id, name, description")
+      .eq("id", projectId)
+      .eq("user_id", user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (!mounted) return;
+        setProject(error ? null : data);
+        setProjectLoading(false);
+      });
+
+    return () => { mounted = false; };
+  }, [projectId, user?.id]);
+
+  const fetchProjectChats = useCallback(async () => {
+    if (!projectId || !user?.id) {
+      setProjectChats([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("chats")
+      .select("id, label, favorited, project_id, updated_at")
+      .eq("user_id", user.id)
+      .eq("project_id", projectId)
+      .order("updated_at", { ascending: false })
+      .limit(50);
+
+    if (!error && data) setProjectChats(data);
+  }, [projectId, user?.id]);
+
+  useEffect(() => {
+    fetchProjectChats();
+  }, [fetchProjectChats]);
 
   function requireAuth() {
     if (user) return true;
@@ -157,10 +460,12 @@ function ChatPageInner() {
     const firstUser = messages.find(m => m.role === "user");
     if (firstUser) {
       document.title = `${firstUser.content.trim().slice(0, 50)} — Nexion`;
+    } else if (project?.name) {
+      document.title = `${project.name} - Nexion`;
     } else {
       document.title = "Nexion";
     }
-  }, [messages]);
+  }, [messages, project?.name]);
 
   // ── Close attach dropdown on outside click ────────────────
   useEffect(() => {
@@ -182,6 +487,28 @@ function ChatPageInner() {
       setMaterialOpen(false);
       setMaterialContent("");
     }
+  }
+
+  async function handleDeleteProjectChat(chatId) {
+    if (!requireAuth()) return;
+    await deleteChat(chatId);
+    setProjectChats(prev => prev.filter(chat => chat.id !== chatId));
+    if (messages.length > 0) {
+      clearMessages();
+      setMaterialOpen(false);
+      setMaterialContent("");
+    }
+    await fetchProjectChats();
+  }
+
+  async function handleRenameChat(chatId, newLabel) {
+    await renameChat(chatId, newLabel);
+    setProjectChats(prev => prev.map(chat => chat.id === chatId ? { ...chat, label: newLabel } : chat));
+  }
+
+  async function handleDeleteChat(chatId) {
+    await deleteChat(chatId);
+    setProjectChats(prev => prev.filter(chat => chat.id !== chatId));
   }
 
   // ── Send a message + persist both turns ───────────────────
@@ -207,6 +534,7 @@ function ChatPageInner() {
     } else {
       await saveMessage("user", userContent);
     }
+    if (projectId) await fetchProjectChats();
 
     // ── Build file context to inject into the AI prompt ───────
     let fileContext = undefined;
@@ -243,6 +571,7 @@ function ChatPageInner() {
     }
 
     setAttachments([]);
+    if (projectId) await fetchProjectChats();
   }
 
   // ── New chat ───────────────────────────────────────────────
@@ -252,6 +581,9 @@ function ChatPageInner() {
     clearMessages();
     setMaterialOpen(false);
     setMaterialContent("");
+    setAttachments([]);
+    setInput("");
+    if (projectId) fetchProjectChats();
   }
 
   // ── Logout ────────────────────────────────────────────────
@@ -347,8 +679,8 @@ function ChatPageInner() {
         onToggleFavorite={toggleFavorite}
         onSend={handleLoadChat}
         onNewChat={handleNewChat}
-        onRenameChat={renameChat}
-        onDeleteChat={deleteChat}
+        onRenameChat={handleRenameChat}
+        onDeleteChat={handleDeleteChat}
         user={user}
         onLoginClick={() => setAuthModalOpen(true)}
         onLogout={handleLogout}
@@ -358,7 +690,32 @@ function ChatPageInner() {
 
         <div style={{ flex: 1, overflowY: "auto", padding: isEmpty ? "0" : "2rem 1rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
 
-          {isEmpty && (
+          {isEmpty && projectId && (
+            <ProjectHome
+              project={project}
+              loading={projectLoading}
+              projectChats={projectChats}
+              input={input}
+              setInput={setInput}
+              inputRef={inputRef}
+              fileInputRef={fileInputRef}
+              imageInputRef={imageInputRef}
+              attachments={attachments}
+              removeAttachment={removeAttachment}
+              handleSend={handleSend}
+              handleKeyDown={handleKeyDown}
+              handlePaste={handlePaste}
+              handleFileInput={handleFileInput}
+              handleImageInput={handleImageInput}
+              onOpenProjectChat={handleLoadChat}
+              onDeleteProjectChat={handleDeleteProjectChat}
+              isLoading={isLoading}
+              user={user}
+              onRequireAuth={requireAuth}
+            />
+          )}
+
+          {isEmpty && !projectId && (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "3rem 2rem" }}>
               <div style={{ fontSize: "32px", marginBottom: "1.5rem", fontFamily: "monospace", color: "#1d4ed8" }}>◈</div>
               <h1 style={{ fontSize: "clamp(1.8rem, 4vw, 2.8rem)", fontWeight: "400", letterSpacing: "-0.02em", marginBottom: "1rem", color: "#e2e8f0" }}>
@@ -434,6 +791,7 @@ function ChatPageInner() {
         </div>
 
         {/* Input */}
+        {!(isEmpty && projectId) && (
         <div style={{ flexShrink: 0, padding: "1rem 1.5rem 1.5rem", borderTop: "1px solid rgba(255,255,255,0.06)", background: "#060a10" }}>
           <div style={{ maxWidth: "700px", margin: "0 auto" }}>
             <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", overflow: "visible", position: "relative" }}>
@@ -539,6 +897,7 @@ function ChatPageInner() {
             <p style={{ textAlign: "center", fontSize: "11px", color: "#475569", marginTop: "12px", fontFamily: "monospace", letterSpacing: "0.05em" }}>NEXION · THESIS AI</p>
           </div>
         </div>
+        )}
       </div>
 
       <MaterialPanel open={materialOpen} content={materialContent} onClose={() => setMaterialOpen(false)} />
@@ -556,6 +915,15 @@ function ChatPageInner() {
         @keyframes slideDown { from{opacity:0;max-height:0;transform:translateY(-10px)} to{opacity:1;max-height:500px;transform:translateY(0)} }
         @keyframes slideInLeft { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
         @keyframes slideUpSmooth { from{opacity:0;transform:translateY(-10px) scale(0.95)} to{opacity:1;transform:translateY(0) scale(1)} }
+        @media (max-width: 980px) {
+          .project-home {
+            grid-template-columns: 1fr !important;
+            padding-top: 2rem !important;
+          }
+          .project-home aside {
+            margin-top: 0 !important;
+          }
+        }
         ::-webkit-scrollbar{width:4px}
         ::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:2px}

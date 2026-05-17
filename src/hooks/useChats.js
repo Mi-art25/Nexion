@@ -2,9 +2,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
-export function useChats(userId, projectId = null) {
+export function useChats(userId, projectId = null, options = {}) {
   const [recents, setRecents] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
+  const filterRecentsByProject = options.filterRecentsByProject ?? false;
 
   const activeChatIdRef = useRef(null);
   activeChatIdRef.current = activeChatId;
@@ -20,14 +21,15 @@ export function useChats(userId, projectId = null) {
       .order("updated_at", { ascending: false })
       .limit(50);
 
-    // If we're inside a project, only show that project's chats
-    if (projectId) {
+    // Project chats still appear in global recents unless a caller explicitly
+    // asks for a project-only list.
+    if (projectId && filterRecentsByProject) {
       query = query.eq("project_id", projectId);
     }
 
     const { data, error } = await query;
     if (!error && data) setRecents(data);
-  }, [userId, projectId]);
+  }, [userId, projectId, filterRecentsByProject]);
 
   useEffect(() => {
     fetchRecents();
