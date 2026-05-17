@@ -2,7 +2,7 @@
 
 import { useNexionChat } from "@/hooks/useNexionChat";
 import { useChats } from "@/hooks/useChats";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
 import Sidebar from "./Sidebar";
 import MaterialPanel from "./MaterialPanel";
