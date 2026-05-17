@@ -3,6 +3,7 @@
 import { useNexionChat } from "@/hooks/useNexionChat";
 import { useChats } from "@/hooks/useChats";
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Sidebar from "./Sidebar";
 import MaterialPanel from "./MaterialPanel";
@@ -107,6 +108,10 @@ export default function ChatPage() {
     };
   }, []);
 
+  // ── Read project from URL ─────────────────────────────────
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get("project");
+
   // ── Chat persistence hook ──────────────────────────────────
   const {
     recents,
@@ -116,7 +121,7 @@ export default function ChatPage() {
     toggleFavorite,
     renameChat,
     deleteChat,
-  } = useChats(user?.id ?? null);
+  } = useChats(user?.id ?? null, projectId);
 
   function requireAuth() {
     if (user) return true;
