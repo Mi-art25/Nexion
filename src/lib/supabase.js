@@ -14,8 +14,17 @@ const supabase = createClient(
 )
 
 export const getSession = async (req) => {
-  const { user } = await supabase.auth.api.getUserByCookie(req)
-  return user
+  try {
+    const token = req.cookies.get('sb-access-token')?.value
+    if (!token) return null
+    
+    const { data: { user }, error } = await supabase.auth.getUser(token)
+    if (error || !user) return null
+    return user
+  } catch (err) {
+    console.error('[getSession] Error:', err.message)
+    return null
+  }
 }
 
 export { supabase } // Export existing supabase client
