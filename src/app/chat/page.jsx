@@ -3,7 +3,6 @@
 import { useNexionChat } from "@/hooks/useNexionChat";
 import { useChats } from "@/hooks/useChats";
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Sidebar from "./Sidebar";
 import MaterialPanel from "./MaterialPanel";
@@ -49,7 +48,7 @@ const THINKING_PHASES = [
   "Refining answer…",
 ];
 
-export default function ChatPage() {
+function ChatPageInner() {
   const { messages, isLoading, sendMessage, clearMessages, setMessages } = useNexionChat();
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -108,10 +107,6 @@ export default function ChatPage() {
     };
   }, []);
 
-  // ── Read project from URL ─────────────────────────────────
-  const searchParams = useSearchParams();
-  const projectId = searchParams.get("project");
-
   // ── Chat persistence hook ──────────────────────────────────
   const {
     recents,
@@ -121,7 +116,7 @@ export default function ChatPage() {
     toggleFavorite,
     renameChat,
     deleteChat,
-  } = useChats(user?.id ?? null, projectId);
+  } = useChats(user?.id ?? null);
 
   function requireAuth() {
     if (user) return true;
@@ -567,5 +562,13 @@ export default function ChatPage() {
         textarea::placeholder,input::placeholder{color:#64748b;opacity:1}
       `}</style>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <ChatPageInner />
+    </Suspense>
   );
 }
