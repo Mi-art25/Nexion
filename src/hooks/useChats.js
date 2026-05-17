@@ -193,29 +193,3 @@ export function useChats(userId) {
   };
 }
 
-// TypeScript type definitions
-type Chat = {
-  id: string;
-  content: string;
-  role: 'user' | 'assistant';
-};
-
-type UseChatsReturn = {
-  chats: Chat[];
-  loadChat: () => void;
-  saveMessage: (message: string) => void;
-};
-
-export default function useChats(): UseChatsReturn {
-  const [chats, setChats] = useState<Chat[]>([]);
-
-  const loadChat = () => {
-    // Load chat history logic
-  };
-
-  const saveMessage = (message: string) => {
-    // Save message logic
-  };
-
-  return { chats, loadChat, saveMessage };
-}

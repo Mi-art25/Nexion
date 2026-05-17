@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import AuthModal from "@/app/chat/AuthModal";
 
 // ─── Loader Component ────────────────────────────────────────────────────────
 
@@ -453,6 +454,7 @@ function InteractiveSubline({ heroVisible }: { heroVisible: boolean }) {
 
 // ─── Magnetic Button ──────────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function MagneticButton({
   href,
   children,
@@ -628,21 +630,31 @@ export default function Home() {
   const mouseRef = useRef({ x: -999, y: -999 });
   const [loaderDone, setLoaderDone] = useState(false);
   const [heroVisible, setHeroVisible] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const router = useRouter();
 
   // ── Redirect logged-in users straight to /chat ──────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) router.replace("/chat");
+      if (session) {
+        router.replace("/chat");
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) router.replace("/chat");
+      if (session) {
+        router.replace("/chat");
+      }
     });
 
     return () => subscription.unsubscribe();
   }, [router]);
   // ────────────────────────────────────────────────────────────
+
+  const handleGetStarted = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    router.push("/chat");
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -866,9 +878,18 @@ export default function Home() {
             transform: heroVisible ? "translateY(0)" : "translateY(16px)",
             transition: "all 0.6s 0.4s ease",
           }}>
-            <MagneticButton href="/chat" primary>
-              Get Started →
-            </MagneticButton>
+            <button
+              onClick={handleGetStarted}
+              className="nexion-btn nexion-btn-primary"
+              style={{
+                background: "#1d4ed8",
+                color: "#fff",
+                border: "1px solid transparent",
+              }}
+            >
+              <span>Get Started</span>
+              <span className="nexion-btn-arrow">→</span>
+            </button>
           </div>
         </section>
 
@@ -926,6 +947,11 @@ export default function Home() {
           </div>
         </section>
       </main>
+
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+      />
     </>
   );
 }

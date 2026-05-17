@@ -1,0 +1,311 @@
+<!-- Error Page HTML Reference -->
+<!-- This shows what users will see when OAuth authentication fails -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication Failed - Nexion</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Georgia, serif;
+            background: linear-gradient(135deg, #0b1120 0%, #0f1729 100%);
+            color: #f8fafc;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .error-container {
+            max-width: 520px;
+            width: 100%;
+            border-radius: 24px;
+            padding: 2.5rem;
+            background: rgba(15, 23, 42, 0.95);
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(226, 232, 240, 0.08);
+        }
+
+        .error-icon {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .icon-circle {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: rgba(249, 115, 115, 0.1);
+            border: 2px solid #f97316;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+        }
+
+        h1 {
+            margin-bottom: 0.75rem;
+            font-size: 1.875rem;
+            font-weight: 700;
+            text-align: center;
+            letter-spacing: -0.01em;
+        }
+
+        .description {
+            color: #cbd5e1;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .error-details {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(226, 232, 240, 0.06);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            font-family: monospace;
+            font-size: 0.875rem;
+            color: #cbd5e1;
+            text-align: center;
+            word-break: break-all;
+        }
+
+        .error-code-label {
+            color: #94a3b8;
+            margin-bottom: 0.5rem;
+        }
+
+        .error-code {
+            color: #f8fafc;
+            font-weight: 600;
+        }
+
+        .error-message {
+            margin-top: 0.75rem;
+            color: #fca5a5;
+            font-size: 0.75rem;
+        }
+
+        .troubleshooting {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid rgba(226, 232, 240, 0.06);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .troubleshooting h2 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin-bottom: 0.75rem;
+        }
+
+        .troubleshooting ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .troubleshooting li {
+            font-size: 0.875rem;
+            color: #94a3b8;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .troubleshooting li:last-child {
+            margin-bottom: 0;
+        }
+
+        .arrow {
+            color: #64748b;
+            margin-top: 0.125rem;
+            flex-shrink: 0;
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-family: Georgia, serif;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(226, 232, 240, 0.2);
+            color: #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(30, 41, 59, 1);
+            border-color: rgba(226, 232, 240, 0.3);
+        }
+
+        .countdown {
+            text-align: center;
+            font-size: 0.875rem;
+            color: #64748b;
+            padding: 1rem;
+            border-top: 1px solid rgba(226, 232, 240, 0.06);
+        }
+
+        .countdown-value {
+            color: #0ea5e9;
+            font-weight: 600;
+        }
+
+        .help-text {
+            margin-top: 1.5rem;
+            text-align: center;
+            font-size: 0.75rem;
+            color: #475569;
+            line-height: 1.5;
+        }
+
+        /* Error Type Variations */
+        .error-type-info {
+            background: rgba(15, 35, 70, 0.5);
+            border-left: 3px solid #0ea5e9;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+            color: #cbd5e1;
+        }
+
+        @media (max-width: 640px) {
+            .error-container {
+                padding: 1.5rem;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .actions {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <!-- Error Icon -->
+        <div class="error-icon">
+            <div class="icon-circle">⚠️</div>
+        </div>
+
+        <!-- Title -->
+        <h1>Authorization Code Missing</h1>
+
+        <!-- Description -->
+        <p class="description">
+            The OAuth provider didn't return an authorization code.
+        </p>
+
+        <!-- Error Details -->
+        <div class="error-details">
+            <div class="error-code-label">Error Code</div>
+            <div class="error-code">no_code</div>
+            <div class="error-message">
+                No authorization code received. Make sure cookies are enabled.
+            </div>
+        </div>
+
+        <!-- Troubleshooting -->
+        <div class="troubleshooting">
+            <h2>Troubleshooting Tips:</h2>
+            <ul>
+                <li>
+                    <span class="arrow">→</span>
+                    <span>Check that cookies are enabled in your browser</span>
+                </li>
+                <li>
+                    <span class="arrow">→</span>
+                    <span>Clear browser cache and cookies, then try again</span>
+                </li>
+                <li>
+                    <span class="arrow">→</span>
+                    <span>Try a different browser or incognito mode</span>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="actions">
+            <button class="action-btn btn-primary" onclick="window.location.href='/'">
+                Try Again
+            </button>
+            <a href="mailto:support@nexion.app" class="action-btn btn-secondary">
+                Support
+            </a>
+        </div>
+
+        <!-- Countdown -->
+        <div class="countdown">
+            Redirecting to home in <span class="countdown-value" id="countdown">5</span>s
+        </div>
+
+        <!-- Help Text -->
+        <p class="help-text">
+            If you continue to experience issues, please clear your browser cookies and cache,
+            then try again. Contact support@nexion.app for further assistance.
+        </p>
+    </div>
+
+    <script>
+        let count = 5;
+        const countdownEl = document.getElementById('countdown');
+        
+        const timer = setInterval(() => {
+            count--;
+            countdownEl.textContent = count;
+            
+            if (count <= 0) {
+                clearInterval(timer);
+                window.location.href = '/';
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

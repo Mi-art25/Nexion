@@ -1,27 +1,12 @@
 // src/hooks/useNexionChat.ts
 import { useState } from "react";
 
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-};
-
-type UseNexionChatReturn = {
-  messages: Message[];
-  sendMessage: (message: string) => Promise<void>;
-  clearMessages: () => void;
-  setMessages: (messages: Message[]) => void;
-  isLoading: boolean;
-  analyzePDF?: (pdfText: string, prompt: string) => Promise<string>;
-  lastProvider?: string | null;
-};
-
-export function useNexionChat(): UseNexionChatReturn {
-  const [messages, setMessages] = useState<Message[]>([]);
+export function useNexionChat() {
+  const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [lastProvider, setLastProvider] = useState(null);
 
-  const sendMessage = async (message: string) => {
+  const sendMessage = async (message) => {
     try {
       setIsLoading(true);
       const response = await fetch("/api/chat", {
@@ -45,7 +30,7 @@ export function useNexionChat(): UseNexionChatReturn {
     }
   };
 
-  const analyzePDF = async (pdfText: string, prompt: string): Promise<string> => {
+  const analyzePDF = async (pdfText, prompt) => {
     try {
       setIsLoading(true);
       const response = await fetch("/api/chat", {

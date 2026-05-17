@@ -81,7 +81,7 @@ function RequestStep() {
         Reset your password
       </h1>
       <p style={{ fontSize: "13px", color: "#475569", fontFamily: "Georgia, serif", lineHeight: "1.7", marginBottom: "2rem" }}>
-        Enter your account email and we'll send you a reset link.
+        Enter your account email and we&apos;ll send you a reset link.
       </p>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
