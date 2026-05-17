@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { useChats } from "@/hooks/useChats";
+import Sidebar from "@/app/chat/Sidebar";
 
 // ─── Icons ────────────────────────────────────────────────────
 const IconPlus = () => (
@@ -14,22 +15,6 @@ const IconPlus = () => (
 const IconFolder = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
     <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-  </svg>
-);
-const IconDots = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
-  </svg>
-);
-const IconTrash = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-  </svg>
-);
-const IconEdit = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
   </svg>
 );
 const IconChat = () => (
@@ -44,43 +29,6 @@ const IconClose = () => (
 );
 
 // ─── Shared nav ───────────────────────────────────────────────
-function NavBar({ user }) {
-  return (
-    <nav style={{
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "0.85rem 1.5rem",
-      borderBottom: "1px solid rgba(255,255,255,0.06)",
-      flexShrink: 0,
-    }}>
-      <Link href="/" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none" }}>
-        <div style={{
-          width: "28px", height: "28px", borderRadius: "7px",
-          background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: "13px", fontWeight: "700", color: "#fff", fontFamily: "monospace",
-        }}>N</div>
-        <span style={{ fontSize: "16px", color: "#e2e8f0", letterSpacing: "0.02em", fontFamily: "Georgia, serif" }}>Nexion</span>
-      </Link>
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-        <Link href="/chat" style={{ fontSize: "13px", color: "#475569", textDecoration: "none", fontFamily: "Georgia, serif", letterSpacing: "0.02em" }}
-          onMouseEnter={e => e.currentTarget.style.color = "#94a3b8"}
-          onMouseLeave={e => e.currentTarget.style.color = "#475569"}
-        >Chat</Link>
-        <Link href="/analyze" style={{ fontSize: "13px", color: "#475569", textDecoration: "none", fontFamily: "Georgia, serif", letterSpacing: "0.02em" }}
-          onMouseEnter={e => e.currentTarget.style.color = "#94a3b8"}
-          onMouseLeave={e => e.currentTarget.style.color = "#475569"}
-        >Analyze</Link>
-        {user && (
-          <Link href="/settings" style={{ fontSize: "13px", color: "#475569", textDecoration: "none", fontFamily: "Georgia, serif", letterSpacing: "0.02em" }}
-            onMouseEnter={e => e.currentTarget.style.color = "#94a3b8"}
-            onMouseLeave={e => e.currentTarget.style.color = "#475569"}
-          >Settings</Link>
-        )}
-      </div>
-    </nav>
-  );
-}
-
 // ─── Create / Edit modal ──────────────────────────────────────
 function ProjectModal({ open, onClose, onSave, initial = null }) {
   const [name, setName] = useState(initial?.name || "");
@@ -189,9 +137,7 @@ function ProjectModal({ open, onClose, onSave, initial = null }) {
 }
 
 // ─── Project card ─────────────────────────────────────────────
-function ProjectCard({ project, onRename, onDelete, onOpen }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-
+function ProjectCard({ project, onOpen }) {
   const chatCount = project.chat_count ?? 0;
   const updatedAt = project.updated_at
     ? new Date(project.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
@@ -242,60 +188,6 @@ function ProjectCard({ project, onRename, onDelete, onOpen }) {
           </div>
         </div>
 
-        {/* 3-dot menu */}
-        <div style={{ position: "relative", flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-          <button
-            onClick={() => setMenuOpen(o => !o)}
-            style={{
-              background: "none", border: "none", cursor: "pointer",
-              padding: "4px", color: "#334155", display: "flex", alignItems: "center",
-              borderRadius: "4px", transition: "color 0.15s",
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = "#64748b"}
-            onMouseLeave={e => e.currentTarget.style.color = "#334155"}
-          >
-            <IconDots />
-          </button>
-          {menuOpen && (
-            <>
-              <div style={{ position: "fixed", inset: 0, zIndex: 999 }} onClick={() => setMenuOpen(false)} />
-              <div style={{
-                position: "absolute", right: 0, top: "calc(100% + 4px)",
-                background: "#0d1424", border: "1px solid rgba(255,255,255,0.1)",
-                borderRadius: "8px", overflow: "hidden", minWidth: "130px",
-                zIndex: 1000, boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-              }}>
-                <button
-                  onClick={() => { onRename(project); setMenuOpen(false); }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: "8px",
-                    width: "100%", padding: "9px 12px", background: "none", border: "none",
-                    cursor: "pointer", color: "#94a3b8", fontSize: "12px",
-                    fontFamily: "Georgia, serif", textAlign: "left",
-                    borderBottom: "1px solid rgba(255,255,255,0.06)", transition: "background 0.1s",
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "#e2e8f0"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "#94a3b8"; }}
-                >
-                  <IconEdit /> Rename
-                </button>
-                <button
-                  onClick={() => { onDelete(project.id); setMenuOpen(false); }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: "8px",
-                    width: "100%", padding: "9px 12px", background: "none", border: "none",
-                    cursor: "pointer", color: "#f87171", fontSize: "12px",
-                    fontFamily: "Georgia, serif", textAlign: "left", transition: "background 0.1s",
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.1)"}
-                  onMouseLeave={e => e.currentTarget.style.background = "none"}
-                >
-                  <IconTrash /> Delete
-                </button>
-              </div>
-            </>
-          )}
-        </div>
       </div>
 
       {/* Footer stats */}
@@ -360,6 +252,14 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const {
+    recents,
+    toggleFavorite,
+    renameChat,
+    deleteChat,
+  } = useChats(user?.id ?? null);
 
   // ── Auth check ──
   useEffect(() => {
@@ -380,20 +280,43 @@ export default function ProjectsPage() {
   }, [router]);
 
   // ── Load projects ──
-  useEffect(() => {
+  const loadProjects = useCallback(async () => {
     if (!user?.id) return;
-    loadProjects();
-  }, [user]);
 
-  async function loadProjects() {
     const { data, error } = await supabase
       .from("projects")
       .select("id, name, description, updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false });
 
-    if (!error && data) setProjects(data);
-  }
+    if (error || !data) return;
+
+    const projectIds = data.map(project => project.id);
+    let countsByProject = {};
+
+    if (projectIds.length > 0) {
+      const { data: chats } = await supabase
+        .from("chats")
+        .select("project_id")
+        .eq("user_id", user.id)
+        .in("project_id", projectIds);
+
+      countsByProject = (chats || []).reduce((counts, chat) => {
+        if (!chat.project_id) return counts;
+        counts[chat.project_id] = (counts[chat.project_id] || 0) + 1;
+        return counts;
+      }, {});
+    }
+
+    setProjects(data.map(project => ({
+      ...project,
+      chat_count: countsByProject[project.id] || 0,
+    })));
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
 
   async function handleCreate({ name, description }) {
     const { data, error } = await supabase
@@ -402,7 +325,7 @@ export default function ProjectsPage() {
       .select("id, name, description, updated_at")
       .single();
     if (error) throw error;
-    setProjects(prev => [data, ...prev]);
+    setProjects(prev => [{ ...data, chat_count: 0 }, ...prev]);
   }
 
   async function handleRename({ name }) {
@@ -415,18 +338,21 @@ export default function ProjectsPage() {
     setProjects(prev => prev.map(p => p.id === editingProject.id ? { ...p, name } : p));
   }
 
-  async function handleDelete(id) {
-    setProjects(prev => prev.filter(p => p.id !== id));
-    await supabase.from("projects").delete().eq("id", id).eq("user_id", user.id);
-  }
-
-  function handleOpenRename(project) {
-    setEditingProject(project);
-    setModalOpen(true);
-  }
-
   function handleOpenProject(id) {
     router.push(`/chat?project=${id}`);
+  }
+
+  function handleNewChat() {
+    router.push("/chat");
+  }
+
+  function handleLoadChat(id) {
+    router.push(`/chat?chat=${id}`);
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.replace("/chat");
   }
 
   if (loading) {
@@ -448,10 +374,23 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#060a10", color: "#e2e8f0", display: "flex", flexDirection: "column" }}>
-      <NavBar user={user} />
+    <div style={{ height: "100vh", background: "#060a10", color: "#e2e8f0", display: "flex", overflow: "hidden" }}>
+      <Sidebar
+        open={sidebarOpen}
+        onOpen={() => setSidebarOpen(true)}
+        onClose={() => setSidebarOpen(false)}
+        recents={recents}
+        onToggleFavorite={toggleFavorite}
+        onSend={handleLoadChat}
+        onNewChat={handleNewChat}
+        onRenameChat={renameChat}
+        onDeleteChat={deleteChat}
+        user={user ? { ...user, plan: "Free plan" } : null}
+        onLoginClick={() => router.push("/chat")}
+        onLogout={handleLogout}
+      />
 
-      <main style={{ flex: 1, maxWidth: "900px", margin: "0 auto", width: "100%", padding: "2.5rem 1.5rem" }}>
+      <main style={{ flex: 1, maxWidth: "900px", margin: "0 auto", width: "100%", padding: "2.5rem 1.5rem", overflowY: "auto" }}>
         {/* Page header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem" }}>
           <div>
@@ -493,8 +432,6 @@ export default function ProjectsPage() {
               <ProjectCard
                 key={project.id}
                 project={project}
-                onRename={handleOpenRename}
-                onDelete={handleDelete}
                 onOpen={handleOpenProject}
               />
             ))}

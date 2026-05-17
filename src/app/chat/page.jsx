@@ -293,6 +293,7 @@ function ProjectHome({
 function ChatPageInner() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get("project");
+  const chatId = searchParams.get("chat");
   const { messages, isLoading, sendMessage, clearMessages, setMessages } = useNexionChat();
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -477,6 +478,20 @@ function ChatPageInner() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!chatId || !user?.id) return;
+
+    let mounted = true;
+    loadChat(chatId).then(pastMessages => {
+      if (!mounted || pastMessages.length === 0) return;
+      setMessages(pastMessages);
+      setMaterialOpen(false);
+      setMaterialContent("");
+    });
+
+    return () => { mounted = false; };
+  }, [chatId, user?.id, loadChat, setMessages]);
 
   // ── Load a past chat from the sidebar ─────────────────────
   async function handleLoadChat(chatId) {
