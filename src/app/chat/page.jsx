@@ -195,7 +195,6 @@ export default function ChatPage() {
     if (!trimmed && attachments.length === 0) return;
     setInput("");
 
-    const pdfAttachment = attachments.find(a => a.type === "application/pdf");
     const userContent = trimmed || `[Attached: ${attachments.map(a => a.name).join(", ")}]`;
 
     // Derive chat label from first user message (truncated)
@@ -209,11 +208,34 @@ export default function ChatPage() {
       await saveMessage("user", userContent);
     }
 
+    // ── Build file context to inject into the AI prompt ───────
+    let fileContext = undefined;
+    if (attachments.length > 0) {
+      const fileTexts = await Promise.all(
+        attachments.map(async (a) => {
+          if (a.kind === "image") {
+            return `[Attached image: ${a.name}]`;
+          }
+          // Decode base64 dataUrl to plain text for readable file types
+          try {
+            const base64 = a.dataUrl.split(",")[1];
+            const decoded = atob(base64);
+            const isReadable = /^[\x09\x0A\x0D\x20-\x7E\u00A0-\uFFFF]*$/.test(decoded.slice(0, 500));
+            if (isReadable) {
+              return `[File: ${a.name}]\n${decoded}`;
+            } else {
+              return `[Attached binary file: ${a.name} (${a.type})]`;
+            }
+          } catch {
+            return `[Attached file: ${a.name}]`;
+          }
+        })
+      );
+      fileContext = { pdfText: fileTexts.join("\n\n---\n\n") };
+    }
+
     // Send to AI
-    const reply = await sendMessage(
-      userContent,
-      pdfAttachment ? { pdfText: `[Attached PDF: ${pdfAttachment.name}]\n${pdfAttachment.dataUrl}` } : undefined
-    );
+    const reply = await sendMessage(userContent, fileContext);
 
     // Save assistant reply
     if (reply) {
